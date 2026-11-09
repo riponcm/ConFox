@@ -99,6 +99,10 @@ button.chat-source:hover { background: var(--panel-3); color: var(--text); }
 .chat-source-body { display: flex; flex-direction: column; min-width: 0; }
 .chat-source-title { color: var(--text); font-weight: 500; overflow-wrap: anywhere; }
 .chat-source-meta { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 3px; color: var(--muted); }
+.chat-source-person { align-items: center; text-decoration: none; }
+a.chat-source:hover { background: var(--panel-3); color: var(--text); }
+.chat-source-avatar { flex: none; width: 26px; height: 26px; font-size: 11px; }
+.chat-source-sample { margin-left: 6px; padding: 0 7px; font-size: 11px; vertical-align: 1px; }
 .chat-usage { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
 
 .chat-form {

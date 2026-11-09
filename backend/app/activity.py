@@ -22,6 +22,11 @@ KINDS = (
     "connect_decline",
     "connect_withdraw",
     "question",
+    "group_propose",
+    "group_join",
+    "group_vote",
+    "group_fix",
+    "board_post",
 )
 DETAIL_CHARS = 60
 

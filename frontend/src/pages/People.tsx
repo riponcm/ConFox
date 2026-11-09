@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
-import { LoaderCircle, Search, SearchX, UserPen, X } from 'lucide-react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { LoaderCircle, Search, SearchX, X, UserPen } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
+import ConnectionsTab from '../components/connect/ConnectionsTab.tsx'
 import type { ConnectResponse, Meeting } from '../components/connect/types.ts'
+import GroupsTab from '../components/groups/GroupsTab.tsx'
+import type { Basis, ProposeSeed } from '../components/groups/types.ts'
 import MatchFilters from '../components/people/MatchFilters.tsx'
 import PersonCard from '../components/people/PersonCard.tsx'
 import { WHY_FILTER } from '../components/people/fields.ts'
 import type { FilterKey, Filters, Kind, MatchResponse, Why } from '../components/people/types.ts'
-import { useProfile } from '../profile.ts'
 import '../styles/people.css'
 import '../styles/connect.css'
+import '../styles/groups.css'
+import { useProfile } from '../profile.ts'
 import '../styles/profile.css'
 
 const KINDS: { value: Kind; label: string }[] = [
@@ -16,9 +20,31 @@ const KINDS: { value: Kind; label: string }[] = [
   { value: 'speaker', label: 'Speakers' },
 ]
 
+type Tab = 'match' | 'connections' | 'groups'
+const TABS: { value: Tab; label: string; lead: string }[] = [
+  {
+    value: 'match',
+    label: 'Match',
+    lead: 'People worth meeting, ranked by what you share. Click a reason to see everyone who shares it.',
+  },
+  { value: 'connections', label: 'Connections', lead: 'Meeting requests to and from you, and the meetings you have.' },
+  {
+    value: 'groups',
+    label: 'Groups',
+    lead: 'Meetups for people who share your school, country, company, community or interests.',
+  },
+]
+
+function initialTab(): Tab {
+  const t = new URLSearchParams(window.location.search).get('tab')
+  return TABS.some((x) => x.value === t) ? (t as Tab) : 'match'
+}
+
 export default function People() {
-  // The ranking follows the saved profile: a save bumps `version`, which is part of the request key.
-  const { version, openEditor } = useProfile()
+  const [tab, setTabState] = useState<Tab>(initialTab)
+  const [seed, setSeed] = useState<ProposeSeed | null>(null)
+  const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ match: null, connections: null, groups: null })
+  const [connectVersion, setConnectVersion] = useState(0)
   const [kind, setKind] = useState<Kind>('attendee')
   // My brief links here with ?q=<name> to open one person.
   const [text, setText] = useState(() => new URLSearchParams(window.location.search).get('q') ?? '')
@@ -35,7 +61,9 @@ export default function People() {
   const [requested, setRequested] = useState<Map<string, Meeting>>(new Map())
   const [meetings, setMeetings] = useState<Map<string, Meeting>>(new Map())
   const params = { user_id: DEMO_USER, kind, q, size: 30, ...filters }
-  const key = JSON.stringify([params, version])
+  // The ranking follows the saved profile: a save bumps the version, which is part of the request key.
+  const { version: profileVersion, openEditor } = useProfile()
+  const key = JSON.stringify([params, profileVersion])
   const { data, failed } = res
   const loading = res.key !== key
 
@@ -56,6 +84,7 @@ export default function People() {
     return () => ctrl.abort()
   }, [key])
 
+  // Reloaded when the Connections tab changes something, so Match cards show the same state.
   useEffect(() => {
     const ctrl = new AbortController()
     getJSON<ConnectResponse>('connect', { user_id: DEMO_USER }, { signal: ctrl.signal })
@@ -65,7 +94,29 @@ export default function People() {
       })
       .catch((err: unknown) => !ctrl.signal.aborted && console.warn('connections failed', err))
     return () => ctrl.abort()
-  }, [])
+  }, [connectVersion])
+
+  // The tab lives in the address (?tab=groups) so it survives a reload and can be linked to.
+  const setTab = (next: Tab, proposal: ProposeSeed | null = null) => {
+    setTabState(next)
+    setSeed(proposal)
+    const url = new URL(window.location.href)
+    if (next === 'match') url.searchParams.delete('tab')
+    else url.searchParams.set('tab', next)
+    window.history.replaceState(window.history.state, '', url)
+  }
+
+  const onTabKey = (e: KeyboardEvent) => {
+    const i = TABS.findIndex((t) => t.value === tab)
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+    const to = e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : step ? (i + step + TABS.length) % TABS.length : -1
+    if (to < 0) return
+    e.preventDefault()
+    setTab(TABS[to].value)
+    tabRefs.current[TABS[to].value]?.focus()
+  }
+
+  const propose = (basis: Basis, value: string) => setTab('groups', { basis, value })
 
   const addRequested = (m: Meeting) => setRequested((prev) => new Map(prev).set(m.with_id, m))
   const removeRequested = (personId: string) =>
@@ -100,14 +151,48 @@ export default function People() {
     <section className="page people-page" aria-labelledby="page-title">
       <h1 id="page-title">People</h1>
       <p className="page-lead">
-        People worth meeting, ranked by what you share with your profile. Click a reason to see everyone who shares
-        it.{' '}
+        {TABS.find((t) => t.value === tab)?.lead}{' '}
         <button type="button" className="pf-edit-link" onClick={openEditor}>
           <UserPen size={14} aria-hidden="true" />
           Edit profile
         </button>
       </p>
 
+      <div className="people-tabs" role="tablist" aria-label="People views" onKeyDown={onTabKey}>
+        {TABS.map((t) => (
+          <button
+            key={t.value}
+            ref={(el) => {
+              tabRefs.current[t.value] = el
+            }}
+            id={`people-tab-${t.value}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.value}
+            aria-controls={`people-panel-${t.value}`}
+            tabIndex={tab === t.value ? 0 : -1}
+            className="people-tab"
+            onClick={() => setTab(t.value)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'connections' && (
+        <div id="people-panel-connections" role="tabpanel" aria-labelledby="people-tab-connections">
+          <ConnectionsTab userId={DEMO_USER} onChanged={() => setConnectVersion((v) => v + 1)} />
+        </div>
+      )}
+
+      {tab === 'groups' && (
+        <div id="people-panel-groups" role="tabpanel" aria-labelledby="people-tab-groups">
+          <GroupsTab userId={DEMO_USER} seed={seed} />
+        </div>
+      )}
+
+      {tab === 'match' && (
+      <div id="people-panel-match" role="tabpanel" aria-labelledby="people-tab-match">
       <div className="people-controls">
         <label className="people-search">
           <Search size={16} aria-hidden="true" />
@@ -195,12 +280,15 @@ export default function People() {
                   meeting={meetings.get(p.id)}
                   onRequested={addRequested}
                   onWithdrawn={removeRequested}
+                  onPropose={propose}
                 />
               </li>
             ))}
           </ol>
         )}
       </div>
+      </div>
+      )}
     </section>
   )
 }

@@ -4,12 +4,14 @@ import { CalendarPlus, Check } from 'lucide-react'
 type Props = {
   title: string
   on: boolean
+  /** Text when off; "Agenda" by default. */
+  offLabel?: string
   /** Adds or removes the session; resolves once the page has the new state. */
   onToggle: () => Promise<void>
 }
 
 /** Add to agenda: outlined "Agenda" when off, filled "Added" when on. Disabled while the change is saving. */
-export default function AgendaButton({ title, on, onToggle }: Props) {
+export default function AgendaButton({ title, on, offLabel = 'Agenda', onToggle }: Props) {
   const [busy, setBusy] = useState(false)
   const click = () => {
     setBusy(true)
@@ -27,7 +29,7 @@ export default function AgendaButton({ title, on, onToggle }: Props) {
       onClick={click}
     >
       {on ? <Check size={14} aria-hidden="true" /> : <CalendarPlus size={14} aria-hidden="true" />}
-      <span>{on ? 'Added' : 'Agenda'}</span>
+      <span>{on ? 'Added' : offLabel}</span>
     </button>
   )
 }

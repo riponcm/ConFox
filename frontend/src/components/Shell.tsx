@@ -4,6 +4,8 @@ import { DEMO_USER, getJSON } from '../api.ts'
 import { ProfileContext, type Profile, type SaveResponse } from '../profile.ts'
 import ProfileDrawer from './ProfileDrawer.tsx'
 import Rail from './Rail.tsx'
+import SessionDrawerProvider from './session/SessionDrawerProvider.tsx'
+import type { ShellContext } from './shellContext.ts'
 import Toast from './Toast.tsx'
 import TopBar from './TopBar.tsx'
 
@@ -30,6 +32,8 @@ export default function Shell() {
 
   const openEditor = useCallback(() => setProfileOpen(true), [])
   const ctx = useMemo(() => ({ profile, version, openEditor }), [profile, version, openEditor])
+  // Pages reached through the router (Schedule's "edit" link) open the same editor.
+  const outlet: ShellContext = { openProfile: openEditor }
 
   const onSaved = (res: SaveResponse) => {
     setProfile(res.profile)
@@ -46,9 +50,11 @@ export default function Shell() {
         <a className="skip-link" href="#main">Skip to content</a>
         <TopBar profileOpen={profileOpen} onOpenProfile={openEditor} />
         <Rail />
-        <main id="main" className="shell-main" tabIndex={-1}>
-          <Outlet />
-        </main>
+        <SessionDrawerProvider>
+          <main id="main" className="shell-main" tabIndex={-1}>
+            <Outlet context={outlet} />
+          </main>
+        </SessionDrawerProvider>
         <ProfileDrawer
           open={profileOpen}
           profile={profile}

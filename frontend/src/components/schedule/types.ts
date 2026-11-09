@@ -16,6 +16,7 @@ export type ScheduleSession = {
   projects?: string[]
   room?: string
   venue?: string
+  minutes?: number
   speaker_names?: string[]
   // Added by /api/schedule/day; absent on search results.
   for_you?: boolean
@@ -23,6 +24,9 @@ export type ScheduleSession = {
   fit?: number
   on_agenda?: boolean
   clashes?: string[]
+  /** Other attendees who saved it, and up to three of the user's people among them (meetings, top matches). */
+  going?: number
+  going_names?: string[]
   // Added by /api/search.
   score?: number
 }
@@ -48,7 +52,13 @@ export type DayResponse = {
   meetings: AgendaItem[]
   pending: AgendaItem[]
   semantic: boolean
+  summary?: { for_you: number; total: number; on_agenda: number }
+  facets?: Partial<Record<FacetName, Bucket[]>>
+  /** The profile's interests and projects, shown as keyword chips. */
+  interests?: string[]
 }
+
+export type FacetName = 'kind' | 'track' | 'level' | 'venue'
 
 /** GET /api/agenda */
 export type AgendaResponse = { items: AgendaItem[]; pending: AgendaItem[] }

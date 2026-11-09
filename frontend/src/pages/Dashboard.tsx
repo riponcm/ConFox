@@ -1,14 +1,62 @@
-import { useCallback, useEffect, useState } from 'react'
-import { BarChart3, Building2, Clock, Database, Globe, Layers, RefreshCw } from 'lucide-react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Activity,
+  BarChart3,
+  Building2,
+  CalendarRange,
+  Database,
+  Flame,
+  Globe,
+  GraduationCap,
+  Layers,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Sun,
+} from 'lucide-react'
 import { getJSON } from '../api.ts'
 import HealthLine from '../components/HealthLine.tsx'
-import HeroRow from '../components/dashboard/HeroRow.tsx'
-import NextUp from '../components/dashboard/NextUp.tsx'
-import RankList from '../components/dashboard/RankList.tsx'
-import StatRow from '../components/dashboard/StatRow.tsx'
+import ActivitySpark from '../components/dashboard/ActivitySpark.tsx'
+import DashTiles from '../components/dashboard/DashTiles.tsx'
+import RankList, { type RankItem } from '../components/dashboard/RankList.tsx'
 import TimelineChart from '../components/dashboard/TimelineChart.tsx'
-import { type DashboardData, dayLabel, hhmm } from '../components/dashboard/types.ts'
+import { type DashboardData, type Named, dayLabel, fmt, hhmm } from '../components/dashboard/types.ts'
 import '../styles/dashboard.css'
+
+const named = (items: Named[]): RankItem[] =>
+  items.map((i) => ({ name: i.name, value: i.count, tag: i.pinned ? 'Host city' : undefined }))
+
+function Card({
+  id,
+  icon: Icon,
+  title,
+  sub,
+  sample,
+  children,
+}: {
+  id: string
+  icon: LucideIcon
+  title: string
+  sub: string
+  sample?: boolean
+  children: ReactNode
+}) {
+  return (
+    <article className="dash-card" aria-labelledby={`dash-${id}-title`}>
+      <h2 id={`dash-${id}-title`} className="dash-card-title">
+        <Icon size={16} aria-hidden="true" />
+        {title}
+      </h2>
+      <p className="dash-card-sub">
+        {sub}
+        {sample && <span className="chip chip-warn">Sample</span>}
+      </p>
+      {children}
+    </article>
+  )
+}
 
 export default function Dashboard() {
   // null means "the API decides": the day of the demo clock.
@@ -38,35 +86,51 @@ export default function Dashboard() {
 
   const today = data?.is_today ? data.day : null
   const selected = data?.day ?? day
+  const on = data?.is_today ? 'today' : data ? `on ${dayLabel(data.day)}` : ''
 
   return (
     <section className="page dashboard" aria-labelledby="page-title" aria-busy={loading}>
       <header className="dash-head">
-        <div>
+        <div className="dash-head-text">
           <h1 id="page-title">Dashboard</h1>
           <p className="page-lead">
-            The conference pulse
-            {data ? ` for ${dayLabel(data.day, 'long')}` : ''}
-            {data?.is_today ? `, as of ${hhmm(data.now)}` : ''}.
+            {data && (
+              <>
+                {dayLabel(data.day, 'long')}
+                {data.is_today && (
+                  <>
+                    , <time dateTime={data.now}>{hhmm(data.now)}</time>
+                  </>
+                )}{' '}
+                &middot;{' '}
+              </>
+            )}
+            Salt Palace &middot; live from Elasticsearch
           </p>
         </div>
-        {data && data.days.length > 1 && (
-          <div className="dash-days" role="group" aria-label="Day">
-            {data.days.map((d) => (
-              <button
-                key={d.day}
-                type="button"
-                className="dash-day"
-                aria-pressed={d.day === selected}
-                onClick={() => setDay(d.day)}
-                disabled={loading && d.day === selected}
-              >
-                {dayLabel(d.day)}
-                {d.day === today && <span className="dash-sr-only"> (today)</span>}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="dash-head-actions">
+          <Link to="/brief" className="btn-primary dash-brief">
+            <Sun size={15} aria-hidden="true" />
+            My brief
+          </Link>
+          {data && data.days.length > 1 && (
+            <div className="dash-days" role="group" aria-label="Day">
+              {data.days.map((d) => (
+                <button
+                  key={d.day}
+                  type="button"
+                  className="dash-day"
+                  aria-pressed={d.day === selected}
+                  onClick={() => setDay(d.day)}
+                  disabled={loading && d.day === selected}
+                >
+                  {dayLabel(d.day)}
+                  {d.day === today && <span className="dash-sr-only"> (today)</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </header>
 
       {error && (
@@ -87,68 +151,81 @@ export default function Dashboard() {
 
       {data && (
         <div className={loading ? 'dash-body is-refreshing' : 'dash-body'}>
-          {data.is_today && <HeroRow />}
-          <StatRow data={data} dayName={dayLabel(data.day)} />
+          <DashTiles data={data} />
 
-          <article className="dash-card dash-card-wide" aria-labelledby="dash-timeline-title">
+          <article className="dash-card" aria-labelledby="dash-timeline-title">
             <h2 id="dash-timeline-title" className="dash-card-title">
               <BarChart3 size={16} aria-hidden="true" />
-              Sessions through the day
+              {data.is_today ? 'Today at a glance' : `${dayLabel(data.day)} at a glance`}
             </h2>
-            <p className="dash-card-sub">Sessions starting in each half hour, by kind.</p>
+            <p className="dash-card-sub">Sessions starting each half hour.</p>
             <TimelineChart data={data} />
           </article>
 
           <div className="dash-grid">
-            <article className="dash-card" aria-labelledby="dash-next-title">
-              <h2 id="dash-next-title" className="dash-card-title">
-                <Clock size={16} aria-hidden="true" />
-                Starting soon
-              </h2>
-              <p className="dash-card-sub">The next 90 minutes, registration left out.</p>
-              <NextUp data={data} />
-            </article>
-
-            <article className="dash-card" aria-labelledby="dash-tracks-title">
-              <h2 id="dash-tracks-title" className="dash-card-title">
-                <Layers size={16} aria-hidden="true" />
-                {data.is_today ? 'Top tracks today' : `Top tracks on ${dayLabel(data.day)}`}
-              </h2>
-              <p className="dash-card-sub">Sessions per track.</p>
+            <Card id="filling" icon={Flame} title="Filling up next" sub="Most-added upcoming sessions." sample>
               <RankList
-                label="Top tracks"
+                label="Most-added upcoming sessions"
+                unit="going"
+                suffix="going"
+                empty="Nothing left to start on this day."
+                items={data.filling.map((s) => ({ name: s.title, value: s.going, time: s.starts_at, sessionId: s.id }))}
+              />
+            </Card>
+
+            <Card id="tracks" icon={Layers} title={`Tracks ${on}`} sub="Sessions by track.">
+              <RankList
+                label="Sessions by track"
                 unit="sessions"
                 items={data.tracks.map((t) => ({ name: t.name, value: t.sessions }))}
               />
-            </article>
+            </Card>
 
-            <article className="dash-card" aria-labelledby="dash-countries-title">
-              <h2 id="dash-countries-title" className="dash-card-title">
-                <Globe size={16} aria-hidden="true" />
-                Where attendees come from
-              </h2>
-              <p className="dash-card-sub">
-                <span className="chip chip-warn">Sample data</span> Generated attendee profiles.
-              </p>
+            <Card id="week" icon={CalendarRange} title="Week" sub="Sessions per day.">
               <RankList
-                label="Attendee countries"
-                unit="attendees"
-                items={data.people.countries.map((c) => ({ name: c.name, value: c.attendees }))}
+                label="Sessions per day"
+                unit="sessions"
+                items={data.days.map((d) => ({
+                  name: `${dayLabel(d.day)}${d.day === today ? ' (today)' : ''}`,
+                  value: d.sessions,
+                }))}
               />
-            </article>
+            </Card>
 
-            <article className="dash-card" aria-labelledby="dash-companies-title">
-              <h2 id="dash-companies-title" className="dash-card-title">
-                <Building2 size={16} aria-hidden="true" />
-                Companies with the most speakers
-              </h2>
-              <p className="dash-card-sub">Speakers per company, from the public schedule.</p>
+            <Card
+              id="activity"
+              icon={Activity}
+              title="Confox activity"
+              sub={`${fmt(data.activity.total)} interactions ${on}: searches, agenda adds, matches, questions.`}
+              sample={data.activity.sample > 0}
+            >
+              <ActivitySpark data={data} />
+            </Card>
+
+            <Card id="countries" icon={Globe} title="Where people are from" sub="Attendees by country." sample>
+              <RankList label="Attendees by country" unit="attendees" items={named(data.people.countries)} />
+            </Card>
+
+            <Card id="searches" icon={Search} title="What people want" sub="Top searches this week." sample>
               <RankList
-                label="Speaker companies"
-                unit="speakers"
-                items={data.people.companies.map((c) => ({ name: c.name, value: c.speakers }))}
+                label="Top searches"
+                unit="searches"
+                empty="No searches yet."
+                items={named(data.activity.searches)}
               />
-            </article>
+            </Card>
+
+            <Card id="schools" icon={GraduationCap} title="Universities here" sub="Alumni groups among attendees." sample>
+              <RankList label="Attendees by university" unit="attendees" items={named(data.people.schools)} />
+            </Card>
+
+            <Card id="companies" icon={Building2} title="Companies here" sub="Attendees by employer." sample>
+              <RankList label="Attendees by employer" unit="attendees" items={named(data.people.companies)} />
+            </Card>
+
+            <Card id="interests" icon={Sparkles} title="Interests" sub="What attendees follow." sample>
+              <RankList label="Attendee interests" unit="attendees" items={named(data.people.interests)} />
+            </Card>
           </div>
         </div>
       )}
@@ -156,8 +233,8 @@ export default function Dashboard() {
       <footer className="dash-foot">
         <p className="dash-source">
           <Database size={14} aria-hidden="true" />
-          Every number here comes from Elasticsearch aggregations over the public schedule. Attendee profiles are
-          generated sample data.
+          Every number here comes from Elasticsearch aggregations over the public schedule. Attendee profiles, agendas
+          and most activity are generated sample data, marked Sample.
         </p>
         <HealthLine />
       </footer>

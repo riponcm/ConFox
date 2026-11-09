@@ -19,19 +19,20 @@ flowchart LR
 |---|---|---|
 | Browser app | Pages, navigation, browser telemetry | Pull request 2b |
 | API | One service; every endpoint traced | Pull requests 0, 1 |
-| Elasticsearch | Sessions, people, agendas, transcripts, connections | Pull requests 2, 3 |
+| Elasticsearch | Sessions, people, agendas, transcripts, connections, meetup groups | Pull requests 2, 3 |
 | LLM | Ask and Catch up answers, grounded in retrieved documents | Pull requests 8, 9 |
 | Telemetry | OpenTelemetry to Dash0: traces, metrics, logs, RUM | Pull requests 1, 12 |
 
 ## Data (pull request 2)
 
-`uv run python -m app.load` reads the snapshot in `data/raw/` and fills three indices. `--only sessions|people|agenda` rebuilds one index and leaves the others alone.
+`uv run python -m app.load` reads the snapshot in `data/raw/` and fills three indices. `--only sessions|people|agenda|activity|groups` rebuilds one index and leaves the others alone.
 
 | Index | Holds | Count |
 |---|---|---|
 | `confox-sessions` | Every scheduled session: time (local, no offset), day, room, venue, track, level, CNCF projects, speakers, kind, `is_food` | 600 |
 | `confox-people` | 712 public speaker profiles from the schedule, plus 80 generated attendees marked `sample: true` (Emma and Alice first, then University of Utah alumni) | 792 |
 | `confox-agenda` | Emma's Monday: the co-located AI day, a confirmed coffee with Alice, a pending lunch request (all `sample: true`) | 3 |
+| `confox-groups` | 5 sample meetup groups and 4 hallway board posts (`--only groups`), all `sample: true`; see Groups and connections | 9 |
 
 Session kinds come from the track and the cleaned title: `keynote`, `talk`, `lightning`, `tutorial`, `contribfest`, `poster`, `showcase`, `colocated`, `break`, `registration`. Titles are stripped of emoji first, so "☕ Coffee Break" inside the Project Lightning Talks track is a `break` with `is_food`.
 
@@ -134,16 +135,20 @@ flowchart LR
 
 Export switches on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. A demo-only endpoint (`POST /api/debug/break`, off by default) sends Elasticsearch a query it rejects, so Dash0 has a real error to find.
 
-## Dashboard (pull request 5)
+## Dashboard (pull request 5, reworked)
 
-"The conference pulse" for one day, built only from Elasticsearch aggregations. `GET /api/dashboard?day=YYYY-MM-DD` (default: the day of `clock.now()`) makes two `size: 0` searches; the response shape is documented in `backend/app/routers/dashboard.py`.
+"The conference pulse" for one day, built only from Elasticsearch aggregations. `GET /api/dashboard?day=YYYY-MM-DD` (default: the day of `clock.now()`) makes one `msearch` with four `size: 0` bodies; the response shape is documented in `backend/app/routers/dashboard.py`. Next coffee and what is on now still come from `GET /api/now`, so the page makes two API calls.
 
-| Request | Aggregations | Feeds |
+| Body | Aggregations | Feeds |
 |---|---|---|
-| `confox-sessions` | `cardinality` of `speaker_ids` and `track` (week); `terms` on `day` (day selector); a `filter` on the day holding `cardinality` (speakers, tracks), `terms` on `track` (top 10) and `kind`, a `date_histogram` on `starts_at` (30 minutes, 07:00 to 19:00, empty buckets kept) with `terms` on `kind` per bucket, and a `filter` on the next 90 minutes (registration left out) with `top_hits` | Stat tiles, timeline, starting soon, top tracks |
-| `confox-people` | `filter` on `sample: true` with `terms` and `cardinality` on `country`; `filter` on `kind: speaker` with `terms` on `company` | Attendee count and countries, speaker companies |
+| `confox-sessions` | `terms` on `day` (week); a `filter` on the day with `terms` on `track` and a `date_histogram` on `starts_at` (30 minutes, 07:00 to 19:00, empty buckets kept) | Day selector, Happening count, timeline, Tracks, Week |
+| `confox-people` | `terms` on `kind`; `filter` on `sample: true`; a `filter` on attendees with `terms` on `country`, `schools`, `company`, `interests` and a `filter` counting University of Utah alumni | People here, Where people are from, Universities, Companies, Interests |
+| `confox-agenda` | a `filter` on confirmed session items starting after now on the day with `terms` on `session_id` (ordered by count, then a `min` of `starts_at`) and `top_hits` for the title; a `filter` on the user's items on the day with `top_hits` | Filling up next, My day, agenda dots on the timeline |
+| `confox-activity` | a `filter` on the day with `terms` on `kind`, a `filter` on `sample` and a `date_histogram` on `at`; a `filter` on `kind: search` with `terms` on `detail` (the whole week) | Confox activity, What people want |
 
-Kinds fold into five groups for the timeline (talks, keynotes, co-located, breaks and food, other); the folding lives in Python so it is unit tested against hand-written aggregation responses. The page draws the stacked bars in plain SVG with a now line, hover and keyboard readouts, and a visually hidden table of every value. Chart colours are the `--chart-*` tokens in `index.css`, five categorical slots validated for colour-vision deficiency against the panel colour. Attendee numbers are labelled as sample data.
+Python shapes the buckets: it merges the user's confirmed items into covered hours (overlaps counted once, against an 8-hour day), counts pending incoming meet requests, marks which half hours hold one of the user's items, stops today's activity buckets at the current half hour, and puts University of Utah first among universities (the host city; the rest follow by count). Each step is a pure function tested against hand-written responses; if one body of the `msearch` fails, the endpoint answers 503.
+
+The page shows four tiles (next coffee, happening, people here, my day with a progress ring), a single-colour bar chart of sessions starting per half hour (past half hours lighter, a dot where the user has an agenda item, a dashed now line, hover and keyboard readouts and a visually hidden table), then nine ranked-bar cards in a 3, 2 or 1 column grid. On a day other than today the personal tiles and the now line are hidden. Attendee profiles, agendas and most activity are labelled as sample data.
 
 ## How features plug in
 
@@ -157,7 +162,7 @@ Kinds fold into five groups for the timeline (talks, keynotes, co-located, break
 
 ## Ask (pull request 8)
 
-`POST /api/ask` answers a question from retrieved sessions and streams the answer as Server-Sent Events.
+`POST /api/ask` answers a question from retrieved sessions, people and transcript chunks, and can recommend people to meet. It streams the answer as Server-Sent Events.
 
 ```mermaid
 sequenceDiagram
@@ -166,7 +171,9 @@ sequenceDiagram
   participant E as Elasticsearch
   participant C as Claude
   B->>A: POST /api/ask {messages, user_id}
-  A->>E: retrieve: BM25 over sessions (top 8), transcript chunks (top 4), user profile
+  A->>A: embed the question once
+  A->>E: one msearch: hybrid sessions (top 8), hybrid people (top 5), transcript chunks (top 4)
+  A->>E: user profile
   A-->>B: data: {type: sources}
   A->>C: chat claude-opus-5-5 (stream)
   C-->>A: text deltas
@@ -176,10 +183,10 @@ sequenceDiagram
 
 | Piece | Where | Notes |
 |---|---|---|
-| Retrieval | `routers/ask.py`, span `retrieve` | `multi_match` over title^3, speaker_names^2, projects^2, track, description; breaks and registration excluded. A day named in the question ("today", "tomorrow", "Wednesday") filters to that day; otherwise today gets a small boost |
-| Prompt | system: role, `clock.now()` spoken ("Monday 9 November, 08:40"), the user's interests and school; latest user turn: numbered sources then the question | Earlier turns are sent back as plain text |
-| Answer | Claude cites `[n]`; the browser shows chips only for the sources the answer cites, with day, time and room | Says so when the sources do not answer |
-| Events | `sources`, `delta`, `done` (tokens, cost, duration, stop reason) or `error` | Counter `confox.chat.requests` (attribute `feature`) |
+| Retrieval | `routers/ask.py`, span `retrieve` | The latest question is embedded once (`embeddings.embed`). One `msearch` runs: **sessions** (BM25 `multi_match` over title^3, speaker_names^2, projects^2, track, description, plus kNN on `embedding`), **people** (BM25 over name^3, title^2, company^2, interests_text^2, bio, plus kNN on the people `embedding`; only kinds `speaker` and `attendee`, never the asking user) and **transcript chunks** (BM25, as before). Each hybrid pair is fused by reciprocal rank fusion (constant 60, window 30, kNN k 20): the native `rrf` retriever, or on a basic licence the same BM25 and kNN lists fetched in the msearch and fused in Python with `search.rrf_fuse` (the licence fallback and its memory are shared with Search). Breaks and registration are excluded; a day named in the question is a filter on both sides, otherwise today gets a small BM25 boost. No `OPENAI_API_KEY`, or a failed embedding call: BM25 only. Span attributes `confox.retrieve.mode` (`hybrid`, `hybrid-client`, `bm25`), `.sessions`, `.people`, `.transcript_chunks` |
+| Prompt | system: role, `clock.now()` spoken ("Monday 9 November, 08:40"), the user's interests and school, rules for people; latest user turn: numbered sources then the question | Sources are numbered sessions, then people, then transcript chunks: `[7] Person: Alice Moreno, ML Engineer at Redwood Labs; interests: ...; sample attendee (generated, not a real person)`. Claude may recommend people, must cite them, must call sample people sample attendees and must not invent contact details. Earlier turns are sent back as plain text |
+| Answer | Claude cites `[n]`; the browser shows chips only for the sources the answer cites | Session chips: day, time and room. Person chips: initials, name, "title · company", a Sample chip for generated attendees, linking to `/people?q=<name>`. Says so when the sources do not answer |
+| Events | `sources`, `delta`, `done` (tokens, cost, duration, stop reason) or `error`. Each source has `n`, `kind` (`session`, `person` or `chunk`), `id`, `title`, `starts_at`, `room`; sessions add `session_kind`, people add `name`, `title` (job title), `company`, `sample`, chunks add `chunk` | Counter `confox.chat.requests` (attribute `feature`) |
 
 ### LLM calls (`app/llm.py`)
 
@@ -221,9 +228,31 @@ The UI labels every transcript "Sample transcript (generated)"; on a talk page t
 
 For you stays short because you can only be in one room: agenda items, keynotes and food always stay; among other picks that start at the same time, the best one stays, plus a second only when its fit is 0.75 or more (a title or project match). The rest keep their reasons and show in Everything. Without vectors, the rules alone decide and `semantic` is false.
 
-Clashes list confirmed agenda items that overlap a session. A full-day co-located event on the agenda is left out, or every session that day would clash; breaks and co-located sessions never show clashes (a meeting over coffee happens at the break). Pending requests never clash.
+Clashes list confirmed agenda items that overlap a session. A full-day co-located event on the agenda is left out, or every session that day would clash; breaks never show clashes (a meeting over coffee happens at the break). Pending requests never clash. The `clashes()` helper still skips co-located sessions; the day endpoint adds what a co-located event overlaps on top (`overlap_labels`), so the 09:00 co-located days show "overlaps Coffee with Alice Moreno".
 
-The page (`src/pages/Schedule.tsx`, `src/components/schedule/`) has day tabs from Monday, a debounced search box over `GET /api/search` (results replace the day view and show the search mode and time; if search is missing it says so and keeps the day view), a For you / Everything toggle with a count, time blocks where runs of other sessions fold into "N more sessions", meetings and pending requests in their slot, and a "now" line from `/api/meta`. Times are read from the strings, never converted through the browser's time zone.
+The day response also carries (added fields only; everything above is unchanged):
+
+| Field | Meaning |
+|---|---|
+| `sessions[].going` | Other attendees who saved the session (confirmed agenda sessions, the user left out) |
+| `sessions[].going_names` | Up to 3 of the user's people among them: confirmed meeting partners (any day) first, then the top 10 Match results (same query as `/api/people/match`, vector when present) |
+| `summary` | `{for_you, total, on_agenda}` for the day |
+| `facets` | `{kind, track, level, venue: [{key, count}]}` over the day's sessions, most common first |
+| `interests` | The profile's interests then projects, deduplicated: the keyword chips |
+
+Going costs two requests on top of the day: the Match query (names, size 10) and one `confox-agenda` aggregation, `terms` on `session_id` with a `cardinality` of `user_id` and a `terms` on `user_id` filtered to the user's people. If either fails the day still loads (logged and recorded on the span) with zero going. The request span carries `confox.schedule.friends` and `confox.schedule.friends_going`. The rules are pure functions in `routers/schedule.py` (`friends`, `going_body`, `parse_going`, `day_extras`, `summary`, `day_facets`, `profile_chips`), tested in `tests/test_schedule_day.py`. The 363 saved sessions of the 80 sample attendees are generated sample data and labelled so on the page.
+
+The page (`src/pages/Schedule.tsx`, `src/components/schedule/`) has:
+
+- **Header**: "Schedule" and a muted line "Mon, Nov 9 · 15 of 76 for you · 1 on your agenda" from `summary`.
+- **Toolbar** (one row, wraps on phones): the debounced search box over `GET /api/search` (results replace the day view and show the search mode and time; if search is missing it says so and keeps the day view), For you / Everything, day pills Mon to Thu (a dot marks today), From now / Whole day (From now hides sessions and meetings that have ended; the default is From now today and Whole day on other days), a Filters button with the active count, and Sort.
+- **Filters panel**: checkbox groups built from `facets` (Kind, Track, Level, Venue, with counts) and the toggles On my agenda, Friends going (`going_names` not empty) and No clashes (sessions on the agenda always stay); Clear and Done. Filters apply in the browser to the loaded day; meetings and requests always stay.
+- **Interest chips**: `interests` with a sparkle icon; each toggles a keyword filter (whole words, any case, in title, track, projects or description, like the API's rule; several chips match any). "From your profile · edit" opens the profile drawer through the shell's outlet context (`components/shellContext.ts`).
+- **Sort**: Time (default) is the day view below; Best match (`fit`) and Most going (`going`, fit breaks ties) are one ranked list with each row's time, the rest folded in For you.
+- **Day view**: blocks by start time with a mono time column and the slot length ("510 min", or a range). A slot with 2+ sessions shown gets "2 in parallel · 1 on your agenda", a green "decided" chip when one is on the agenda, and Compare: a native modal dialog with one column per session (time, room, track, level, length, why, who is going, clash, and Add to agenda). Rows show a kind icon, title, short room, length, level, and chips for the track, why, going ("Zara going", "Alice +2 going", "3 going") and overlaps (warn colour). Runs of other sessions fold into "2 more at this time not matching your interests · Show" or "11 more in this stretch (09:00–09:54) …". Meetings, pending requests and the "now" line stay.
+- **URL state**: `?day=&view=all&from=now|day&sort=fit|going&kind=&track=&level=&venue=&mine=1&friends=1&noclash=1&topic=&q=` (repeatable values, defaults left out), so a reload or a shared link shows the same view.
+
+Times are read from the strings, never converted through the browser's time zone.
 
 ## Agenda and Meet (pull request 7 and 11)
 
@@ -254,6 +283,41 @@ Ids: `{user}-s-{session_id}` for added sessions, `{user}-m-{8 hex}` for new requ
 - **Writes.** Every write refreshes the agenda index so the next read sees it. Counters: `confox.agenda.changes` (attribute `action`: add, remove) and `confox.connect.requests` (`action`: send, accept, decline); the request spans carry the session or person id.
 - **Schedule.** Each day-view row except breaks and registration has an "Agenda" / "Added" toggle; it writes, then reloads the day and the agenda ids, so For you, clashes and the count update together. Search results get the same toggle through the `SessionCard` aside, with state from `GET /api/agenda`. Outgoing requests show as "Request sent".
 - **People.** Every card has a primary "Meet" button that opens an inline panel: the free slots as a native radio group (first one chosen and focused), an optional line, "Send request". After sending, the card says "Request sent for 14:48 · Coffee" and the button becomes a disabled "Requested" (warn colours, since it is pending); people with a pending outgoing request show "Requested" on load, and a confirmed meeting shows as a green chip. Escape closes the panel and returns focus to the button.
+## Groups and connections
+
+The People page has three tabs, kept in the address as `?tab=connections|groups` (Match is the default): **Match** (above), **Connections** and **Groups**. Groups live in `backend/app/routers/groups.py` with the pure rules in `backend/app/groups_store.py`; the UI is `src/components/groups/`, `src/components/connect/ConnectionsTab.tsx` and `src/styles/groups.css`.
+
+**Connections** reads `GET /api/connect`: requests to the user with Accept and Decline, requests they sent with Withdraw, and confirmed meetings (group meetups show as "Group meetup"). It adds no endpoint.
+
+**Groups.** A meetup for people who share a school, country, company, community or interest. Someone proposes it with up to three food or coffee breaks they are free for, others join and vote for the times they can make, and the host fixes one. One document per group in `confox-groups`:
+
+| Field | Meaning |
+|---|---|
+| `type` | `group` (board posts share the index as `post`) |
+| `basis`, `value` | `school`, `country`, `company`, `community` or `interest`, and the shared value ("University of Utah") |
+| `title`, `description` | At most 80 and 280 characters; the title defaults to "University of Utah alumni meetup" and so on |
+| `host_id`, `host_name`, `members`, `member_names`, `max_members` | Host first; names kept in member order so cards need no join; 12 members by default |
+| `proposed_slots`, `votes`, `fixed_slot` | 1 to 3 breaks `{session_id, title, starts_at, ends_at, room}`; `{session_id: [user ids]}`; the chosen slot or null. Stored but not indexed (`enabled: false`), so break ids never become mapping fields |
+| `status`, `created_at`, `sample` | `open` or `fixed`; local time; `true` for seeded groups |
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/groups?user_id` | `{groups, mine}`: groups the user is not in, ranked, and groups they host or joined. Each adds `member_count`, `spots_left`, `is_member`, `is_host`, `match`, `tally` (slots with `votes` and `voted`) and `leading` |
+| `GET /api/groups/suggest?user_id` | `{suggestions: [{basis, value, count, label, title, existing}]}`, at most 6: "University of Utah · 7 people here", with ids of open groups already formed around it |
+| `GET /api/groups/slots?user_id` | Up to 6 breaks the user is free for (the Meet rules from `agenda_store.free_slots`, no other person) |
+| `POST /api/groups {user_id, basis, value, title, description, session_ids}` | The new open group; 422 if a time is not a free break for the host or the input is invalid |
+| `POST /api/groups/{id}/join?user_id`, `/leave?user_id` | The group. Join is idempotent, 409 when full; leaving drops the user's votes; the host cannot leave (409) |
+| `POST /api/groups/{id}/vote {user_id, session_id, vote}` | The group. A member may vote for several times; `vote: false` takes one back; voting on a group joins it first; 422 for a time not proposed, 409 once fixed |
+| `POST /api/groups/{id}/fix {user_id, session_id}` | The fixed group; host only (403), once (409), one of the proposed times (422) |
+
+- **Ranking.** Groups whose value is one of the user's own for the same basis come first, with a `match` reason ("You studied at University of Utah"); then by basis (school, country, community, company, interest), open before fixed, more members first. Suggestions use one `size: 0` search on `confox-people` with a `filters` aggregation per basis over the user's values (company matches current or past), excluding the user, in the same basis order and then by count.
+- **Fixing.** Every member gets a confirmed agenda meeting `{user}-g-{group}` (`kind: meeting`, `group_id`, `with_id` the group, `title` "Meetup: <title>", the break's time and room), so it shows in Agenda, My brief and Connections and blocks that break for Meet. Joining a fixed group writes the joiner's item; leaving deletes it.
+- **Concurrency.** Changes read the group, apply a pure rule and write back with `if_seq_no`/`if_primary_term`; a clash answers 409 and the page reloads.
+- **UI.** "Suggested for you" cards open the Propose dialog (native `<dialog>`) with basis, value and title filled in; times are the free breaks as checkboxes in the shared `SlotList` (radio for Meet, checkboxes here), at most 3. Group cards show the basis chip, member initials and count, each proposed time with a vote bar and a Vote toggle (`aria-pressed`), Join or Leave, and for the host "Fix time" per slot; a fixed group shows its time and "on your agenda". A Match card offers "Propose a University of Utah meetup" from its first school, community, company or interest reason, which switches to Groups with the dialog open.
+- **Hallway board.** Short-lived posts in the same index (`type: post`, `text` up to 140 characters, optional `place`, `tags` limited to the author's own interests, `expires_at` 30, 60 or 180 minutes after posting). `GET /api/groups/board?user_id` returns live posts (expired ones are hidden by `clock.now()`) and meetup groups still to happen, newest first, each with `for_you` (a tag matches the viewer's interests, or the group shares one of their values) and the viewer's `interests` for tagging; `POST /api/groups/board {user_id, text, place, minutes, tags}` posts; `DELETE /api/groups/board/{id}?user_id` lets only the author remove it (403 otherwise). Matching posts are highlighted.
+- **Telemetry.** Counter `confox.groups.changes` (attribute `action`: propose, join, leave, vote, fix, post, unpost); request spans carry `confox.groups.id`, `confox.groups.action` and counts. Activity events `group_propose`, `group_join`, `group_vote`, `group_fix`, `board_post`.
+- **Seed.** `uv run python -m app.load --only groups` rebuilds `confox-groups` alone: University of Utah alumni lunch, Bangladesh meetup, Women in Cloud Native coffee, Kubeflow users and Brasileiros na KubeCon, hosted and joined by sample attendees who share the value (none in Bangladesh, so that one is simply two sample attendees), with votes, plus four board posts until late Monday morning. Emma is in none of them. Everything seeded is labelled "Sample" in the UI.
+
 ## My brief (pull request 10)
 
 One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (day of `clock.now()`) lives in `backend/app/routers/brief.py`; the page is `src/pages/Brief.tsx` with `src/components/brief/` and `src/styles/brief.css`. Nothing new is stored: the endpoint reads `confox-sessions`, `confox-people` and `confox-agenda` and reuses the other features' helpers (schedule `_day_sessions`, `annotate`, `_knn`; Match `rank_people`, `why`; `next_food()`).
@@ -269,6 +333,48 @@ One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (d
 | `summary` | Plain sentences from the data, no LLM: the anchor event, confirmed meetings, waiting requests |
 
 The page shows the date and summary, "People today" (confirmed meetings, incoming requests with Accept and Decline, suggested people linking to `/people?q=`), the "Your day" timeline (dashed free rows link to `/schedule`) and "Suggested for you" as `SessionCard`s. Accept and Decline call `POST /api/connect/{id}/accept|decline` from the connect pull request and refresh; on a 404 the card says "Not available yet". The request span carries `confox.brief.timeline`, `confox.brief.requests_incoming`, `confox.brief.people` and `confox.brief.suggested`. Agenda items and people are labelled as generated sample data.
+
+## Session details
+
+Clicking a session title anywhere opens one drawer with everything about it. `GET /api/sessions/{id}?user_id=emma` lives in `backend/app/routers/sessions.py`; the drawer is `src/components/session/` with `src/styles/session.css`. Nothing new is stored: it reads `confox-sessions`, `confox-people`, `confox-agenda` and `confox-transcripts`, and reuses the Schedule helpers (`_profile`, `_all_agenda`, `_top_matches`, `friends`, `going_body`, `parse_going`, `blocking_items`, `overlap_labels`, `interest_matches`).
+
+| Field | Meaning |
+|---|---|
+| `session` | The whole session document (full description, kind, track, level, projects, room, venue, times, `minutes`), without its vector |
+| `speakers[]` | `confox-people` speaker profiles in the session's order: `name`, `title`, `company`, `bio` (600 characters), `picture`, `links` (http(s) only), `other_sessions` (up to 3). A speaker without a profile keeps the published name |
+| `on_agenda`, `can_add` | The session is a confirmed agenda item of the user; breaks, food and registration cannot be added |
+| `clashes` | Confirmed agenda items overlapping it, as in the day view (`overlap_labels`: a co-located day lists what it overlaps, co-located days on the agenda never block) |
+| `going`, `going_names` | Other attendees who saved it, and up to 8 of the user's people among them (meeting partners, then the top 10 Match results) |
+| `why[]` | Chips `{kind, label}`: profile interests found in the title, projects, track or description (`interest`, or `track` when only the track has it), an interest whose words all appear in the title ("Related to AI inference" for "Cloud Native AI + Inference Day"), profile projects (`project`), and `similar` when the vectors are close |
+| `similarity` | Cosine of profile and session vectors (computed in the API, both are read anyway) and a bucket: `very_close` 0.48+, `close` 0.43+, `related` 0.38+, else `distant`; null without vectors. The cut-offs follow Emma's spread on the demo data (0.12 to 0.55, median 0.39) |
+| `similar` | `{basis, items}`: kNN on the session's own `embedding` (read with `source_exclude_vectors=False`), itself, breaks, food and registration pre-filtered out, top 5 with scores (`semantic`); without a vector, later sessions in the same track (`track`) |
+| `same_track_later` | Up to 5 sessions in the same track starting at or after this one |
+| `catch_up` | `{available, chunks}`: a transcript exists in `confox-transcripts` |
+| `slides_url` | From the schedule when published |
+
+Cost: four reads (session with vector, profile with vector, the user's agenda, the Match query for names; plus an `mget` of agenda session kinds), then one `msearch` with up to six bodies (speakers, their other sessions, kNN, same track later, transcript count, going aggregation). Each body names its index and uses `ignore_unavailable`; a failing body is logged, added to the span as a `confox.session.part_failed` event and left empty, so the drawer still opens. Unknown ids are 404. Spans: `session.read`, `session.user`, `session.related` (attribute `confox.session.parts`) under the request span, which carries `confox.session.id`, `.kind`, `.speakers`, `.similar`, `.similar_basis`, `.going` and `.catch_up`. Pure helpers (`cosine`, `similarity_bucket`, `why_matches`, `title_has_words`, `pick_similar`, `speakers_out`, the body builders and `detail`) are tested in `tests/test_sessions.py`.
+
+Speaker links come from the schedule snapshot; the people loader now indexes them (`links`, an unindexed object). They appear after the next `uv run python -m app.load --only people`; until then the list is empty.
+
+**Drawer.** `SessionDrawerProvider` is mounted once in the Shell. `useSessionDrawer().open(id)` opens it; `SessionLink` is the title button every list uses (Schedule rows in the day view and ranked views, search results and Brief suggestions through `SessionCard`, Compare dialog titles, Now cards and tiles, Dashboard "Starting soon", the My brief timeline). The open session is the URL parameter `?session=<id>` (replace, so a reload or a shared link opens the same drawer on any page); the in-drawer history is kept in the provider, so a similar session or a speaker's other talk opens inside the drawer and Back returns. A URL naming another session starts a fresh history.
+
+It is a native modal `<dialog>` on the right, full width under 768 px (sized in percent, since `100vw` includes the page scrollbar): focus is trapped, Escape closes it (only the drawer when it is opened from the Compare dialog), focus returns to the title that opened it, and after Back or a similar session focus moves to the new title. Content: kind, title, day and time range with length, room and venue, track, level and project chips, the Schedule's `AgendaButton`, "Catch up on this talk" (to `/catch-up?talk=<id>`, the Catch up page's own parameter; `?session=` would reopen the drawer there) and Slides when present, the clash warning, "Why it matches you", Going (labelled sample data), the description (Show more past 360 characters), speakers (initials avatar, name, title and company, bio, links, Also speaking) and Similar sessions (or "Later in this track"). Adding or removing in the drawer bumps `agendaVersion` in the provider; Schedule and My brief reload on it, so rows, For you and the brief agree.
+## Now
+
+"Right now" for the signed-in attendee: where to be next, what comes after, and a two-hour timeline. `GET /api/now?user_id=emma` lives in `backend/app/routers/now.py` (response shape in its docstring); the page is `src/pages/Now.tsx` with `src/styles/now.css`. Nothing new is stored. The older fields `food` (`next_food()` from `app/now.py`), `on_now_total`, `soon`, `soon_total` and `my_next` keep their shapes because the Dashboard reads them; `on_now` now lists every session running (not just six), each with `going` and `short_title`.
+
+| Field | Rule |
+|---|---|
+| `next` | The first confirmed agenda item today that has not started (a meeting counts until it ends), so a co-located day already under way gives way to the coffee. Without one, the earliest for-you session still to start, best fit first. Built on My brief's `build_timeline` (short titles, all-day flag) |
+| `then` | The agenda item or food break after `next`; a break that starts with a confirmed meeting is that meeting ("Coffee with Alice Moreno") |
+| `slots` | Sessions starting in the next 120 minutes (`horizon_minutes`), one entry per start time; breaks get their own entry with `food: true`. `featured` is the session on the user's agenda, else the best for-you match (Schedule's `annotate`, kNN when the profile has a vector), else the most saved; null when none qualifies. `others` are the rest of the slot, most saved first |
+| `going` | Confirmed agenda sessions across all users (mostly the 80 sample attendees), from one aggregation: `terms` on `session_id` over the on-now and slot ids |
+| `friends` | Up to two names of people the user knows who saved the featured session: their meetings and requests first, then the top 15 Match results (same ranking as My brief). Same aggregation, a `filter` on those user ids with `terms` on `session_id` and `user_id` |
+| `simulated` | `DEMO_NOW` is set; the header then says "simulated clock" |
+
+Six Elasticsearch requests: the day's sessions, the user's agenda, the profile, kNN (only with a vector), the Match ranking, and the going aggregation. The choices (`pick_next`, `pick_then`, `group_slots`, `choose_featured`, `build_slots`, `known_people`, `parse_going`) are pure functions tested with hand-written dicts. The span carries `confox.now.on_now`, `confox.now.slots` and `confox.now.next_source`.
+
+The page shows the header with a "My brief" button, a `--hero` banner (Where to be next, Then; columns stack on phone), then "Next two hours": a vertical timeline with the time and "now" / "in 20 min" on the left. The first row is "N on now", expandable; each slot shows its featured card (title, time, room, track chip, why chip, "2 going · names") and a "+N more · titles · show" line that expands to compact rows; breaks are quiet rows with a coffee icon. Agenda, going counts and names are labelled as generated sample data.
 
 ## Key decisions
 
