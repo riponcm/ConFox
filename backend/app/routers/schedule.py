@@ -20,7 +20,7 @@ from opentelemetry import trace
 from ..clock import now
 from ..config import settings
 from ..es import es
-from .people import rank_people
+from .people import SearchFailed, rank_people
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
 log = logging.getLogger(__name__)
@@ -357,7 +357,7 @@ def _top_matches(user_id: str, profile: dict, vector: list[float] | None) -> lis
         return []
     try:
         ranked, _, _ = rank_people(user_id, profile, vector, size=FRIENDS)
-    except ApiError as exc:
+    except (ApiError, SearchFailed) as exc:
         # Going names are a nicety: the day still loads without them.
         log.warning("schedule: match for going names failed: %s", exc)
         trace.get_current_span().record_exception(exc)

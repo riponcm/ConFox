@@ -128,3 +128,13 @@ def test_top_matches_uses_the_people_ranking(monkeypatch):
         {"id": "alice", "name": "Alice Moreno"}
     ]
     assert calls == [("emma", schedule.FRIENDS)]
+
+
+def test_top_matches_is_empty_when_ranking_fails(monkeypatch):
+    from app.routers import people, schedule
+
+    def failing(*_args, **_kwargs):
+        raise people.SearchFailed("people index is rebuilding")
+
+    monkeypatch.setattr(schedule, "rank_people", failing)
+    assert schedule._top_matches("emma", {"interests": ["AI inference"]}, None) == []
