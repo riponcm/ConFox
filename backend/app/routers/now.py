@@ -54,7 +54,16 @@ def now_view(user_id: str | None = None) -> dict:
         index=settings.idx_agenda,
         size=50,
         sort=[{"starts_at": "asc"}],
-        query={"bool": {"filter": [{"term": {"user_id": uid}}, {"range": {"ends_at": {"gt": now_iso}}}]}},
+        # Today only: the tile shows times without a date, so an item from a later day would read as "later today".
+        query={
+            "bool": {
+                "filter": [
+                    {"term": {"user_id": uid}},
+                    {"range": {"ends_at": {"gt": now_iso}}},
+                    {"range": {"starts_at": {"lt": (current.date() + timedelta(days=1)).isoformat() + "T00:00:00"}}},
+                ]
+            }
+        },
     )["hits"]["hits"]
     upcoming = [h["_source"] for h in agenda if h["_source"].get("status") == "confirmed"]
     mine = next((a for a in upcoming if a.get("kind") == "meeting" or a["starts_at"] > now_iso), None)
