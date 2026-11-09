@@ -364,3 +364,26 @@ def test_sample_posts_are_tagged_with_their_authors_interests():
     assert len(posts) == 4 and all(p["sample"] and p["type"] == "post" for p in posts)
     assert len({p["author_id"] for p in posts}) == 4 and "emma" not in {p["author_id"] for p in posts}
     assert all(p["tags"] and p["expires_at"] > "2026-11-09T08:40:00" for p in posts)
+
+
+def test_busy_at_finds_a_confirmed_item_at_the_meetup_time(monkeypatch):
+    from app.routers import groups as router
+
+    slot = {"starts_at": "2026-11-09T14:48:00", "ends_at": "2026-11-09T15:03:00"}
+    items = [
+        {"id": "emma-g-g1", "status": "confirmed", "starts_at": slot["starts_at"], "ends_at": slot["ends_at"]},
+        {
+            "id": "emma-colocated",
+            "status": "confirmed",
+            "session_id": "day",
+            "starts_at": "2026-11-09T09:00:00",
+            "ends_at": "2026-11-09T17:30:00",
+        },  # fmt: skip
+    ]
+    monkeypatch.setattr(router.agenda, "user_items", lambda uid: items)
+    monkeypatch.setattr(router.agenda, "session_kinds", lambda ids: {"day": "colocated"})
+    # Its own meetup item and the co-located day do not count, so the user is free.
+    assert router._busy_at("emma", slot, "g1") is None
+    coffee = {"id": "emma-coffee", "status": "confirmed", "title": "Coffee", **slot}
+    monkeypatch.setattr(router.agenda, "user_items", lambda uid: [*items, coffee])
+    assert router._busy_at("emma", slot, "g1")["title"] == "Coffee"

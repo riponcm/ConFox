@@ -33,6 +33,8 @@ export type Group = {
   member_count: number
   spots_left: number
   is_member: boolean
+  /** After fix: members not given the meetup because they were busy then. */
+  busy_members?: string[]
   is_host: boolean
   /** Why the group is relevant to the user ("You studied at University of Utah"), if it is. */
   match: { basis: Basis; value: string; label: string } | null

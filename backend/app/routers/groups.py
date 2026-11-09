@@ -189,15 +189,16 @@ def join(group_id: str, user_id: str = _user_id()) -> dict:
         current, _ = store.get(group_id)
     except store.GroupError as exc:
         raise _http(exc) from exc
-    if current.get("status") == "fixed" and not store.is_member(current, user_id):
+    if current.get("status") == "fixed":
         busy = _busy_at(user_id, current.get("fixed_slot"), group_id)
-        if busy:  # joining would put a second confirmed item at the same time
+        if busy:  # the meetup would be a second confirmed item at the same time
             raise HTTPException(status_code=409, detail=f"you already have {busy.get('title') or 'something'} then")
     before, after = _change(group_id, user_id, "join", lambda g: store.join(g, user_id, user.get("name") or user_id))
     if after is not before:
         activity.record("group_join", user_id, group_id)
-        if after.get("status") == "fixed":
-            _write_agenda(after, [user_id])
+    if after.get("status") == "fixed":
+        # Also for members skipped at fix time because they were busy: once free, joining again adds the meetup.
+        _write_agenda(after, [user_id])
     return store.view(after, user_id, user)
 
 

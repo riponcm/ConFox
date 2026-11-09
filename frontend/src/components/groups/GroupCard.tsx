@@ -56,9 +56,13 @@ export default function GroupCard({ group: g, userId, onChanged }: Props) {
       on ? `Voted for ${s.title} at ${hhmm(s.starts_at)}.` : `Vote for ${hhmm(s.starts_at)} taken back.`,
     )
   const fix = (s: GroupSlot) =>
-    act(`fix-${s.session_id}`, 'fix', { user_id: userId, session_id: s.session_id }, () =>
-      `Fixed ${g.title} for ${s.title} at ${hhmm(s.starts_at)}. It is on your agenda.`,
-    )
+    act(`fix-${s.session_id}`, 'fix', { user_id: userId, session_id: s.session_id }, (next) => {
+      const left = next.busy_members ?? []
+      const fixed = `Fixed ${g.title} for ${s.title} at ${hhmm(s.starts_at)}.`
+      return left.length
+        ? `${fixed} Not added for ${left.join(', ')}: busy then. They can join again once free.`
+        : `${fixed} It is on every member's agenda.`
+    })
 
   return (
     <article className="group-card" aria-labelledby={headingId}>
