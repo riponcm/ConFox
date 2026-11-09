@@ -77,7 +77,9 @@ docker compose up -d    # Elasticsearch on localhost:9200
 ```
 
 ```bash
-cd backend && uv sync && uv run uvicorn app.main:app --port 8000 --reload
+cd backend && uv sync
+uv run python -m app.load     # sessions, speakers, sample attendees, Emma's Monday
+uv run uvicorn app.main:app --port 8000 --reload
 ```
 
 ```bash

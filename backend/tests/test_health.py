@@ -13,10 +13,15 @@ def test_health_answers_without_elasticsearch():
 
 
 def test_health_logs_elasticsearch_failure(monkeypatch, caplog):
-    def boom():
-        raise ConnectionError("connection refused")
+    class Unreachable:
+        def options(self, **_kwargs):
+            return self
 
-    monkeypatch.setattr(main.es.cluster, "health", boom)
+        @property
+        def cluster(self):
+            raise ConnectionError("connection refused")
+
+    monkeypatch.setattr(main, "es", Unreachable())
     with caplog.at_level(logging.WARNING):
         r = TestClient(app).get("/api/health")
     assert r.json() == {"status": "ok", "elasticsearch": "unreachable"}
