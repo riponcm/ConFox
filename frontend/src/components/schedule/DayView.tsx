@@ -1,30 +1,36 @@
 import { Fragment, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { MeetingRow, ScheduleRow } from './ScheduleRow.tsx'
+import type { ToggleAgenda } from './agenda.ts'
 import { buildSegments, byStart, nowIndex, type Entry } from './segments.ts'
 import { hhmm } from './time.ts'
 import type { DayResponse } from './types.ts'
 
-type Props = { data: DayResponse; forYouOnly: boolean }
+type Props = { data: DayResponse; forYouOnly: boolean; onToggleAgenda?: ToggleAgenda }
+type RowProps = { muted?: boolean; onToggleAgenda?: ToggleAgenda }
 
-function EntryRow({ entry, muted }: { entry: Entry; muted?: boolean }) {
-  return entry.type === 'meeting' ? <MeetingRow item={entry.item} /> : <ScheduleRow session={entry.session} muted={muted} />
+function EntryRow({ entry, muted, onToggleAgenda }: RowProps & { entry: Entry }) {
+  return entry.type === 'meeting' ? (
+    <MeetingRow item={entry.item} />
+  ) : (
+    <ScheduleRow session={entry.session} muted={muted} onToggleAgenda={onToggleAgenda} />
+  )
 }
 
-function Block({ start, entries, muted }: { start: string; entries: Entry[]; muted?: boolean }) {
+function Block({ start, entries, muted, onToggleAgenda }: RowProps & { start: string; entries: Entry[] }) {
   return (
     <section className="sch-block" aria-label={`From ${hhmm(start)}`}>
       <h3 className="sch-block-time">{hhmm(start)}</h3>
       <ul className="sch-list">
         {entries.map((e) => (
-          <EntryRow key={e.id} entry={e} muted={muted} />
+          <EntryRow key={e.id} entry={e} muted={muted} onToggleAgenda={onToggleAgenda} />
         ))}
       </ul>
     </section>
   )
 }
 
-export default function DayView({ data, forYouOnly }: Props) {
+export default function DayView({ data, forYouOnly, onToggleAgenda }: Props) {
   const [open, setOpen] = useState<Set<string>>(new Set())
   const segments = buildSegments(data, forYouOnly)
   const isToday = data.now.slice(0, 10) === data.day
@@ -52,7 +58,7 @@ export default function DayView({ data, forYouOnly }: Props) {
         <Fragment key={seg.key}>
           {i === nowAt && nowLine}
           {seg.type === 'block' ? (
-            <Block start={seg.start} entries={seg.entries} />
+            <Block start={seg.start} entries={seg.entries} onToggleAgenda={onToggleAgenda} />
           ) : (
             <div className="sch-fold">
               <button
@@ -77,7 +83,7 @@ export default function DayView({ data, forYouOnly }: Props) {
               </button>
               {open.has(seg.key) &&
                 byStart(seg.entries).map(([start, list]) => (
-                  <Block key={start} start={start} entries={list} muted />
+                  <Block key={start} start={start} entries={list} muted onToggleAgenda={onToggleAgenda} />
                 ))}
             </div>
           )}

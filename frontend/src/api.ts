@@ -37,3 +37,9 @@ export async function postJSON<T>(path: string, body: unknown, init?: RequestIni
   if (!r.ok) throw new ApiError(r.status, `${r.status} ${r.statusText}`)
   return (await r.json()) as T
 }
+
+export async function deleteJSON<T>(path: string, params?: Params, init?: RequestInit): Promise<T> {
+  const r = await fetch(apiUrl(path, params), { ...init, method: 'DELETE' })
+  if (!r.ok) throw new ApiError(r.status, `${r.status} ${r.statusText}`)
+  return (await r.json()) as T
+}

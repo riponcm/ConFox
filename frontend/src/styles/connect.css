@@ -1,0 +1,81 @@
+/* Meet: the button on person cards and the inline request panel. Colours come only from the tokens in index.css. */
+
+.person-head .meet-button { margin-left: auto; padding: 6px 12px; font-size: 13px; }
+.btn-primary:disabled { cursor: default; }
+/* A request that is still pending reads as waiting, not as an action. */
+.meet-button.is-requested { background: var(--warn-soft); color: var(--warn); box-shadow: none; }
+
+.meet-confirmed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.meet-confirmed time { font-size: 12px; }
+
+.meet-panel { margin-top: 12px; padding: 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--bg-2); }
+.meet-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-2); }
+.meet-status:focus { outline: none; }
+.meet-form { display: flex; flex-direction: column; gap: 12px; }
+
+.slot-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.slot-legend { margin: 0 0 6px; padding: 0; color: var(--text); font-weight: 600; }
+.slot {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.slot:hover { border-color: var(--line-strong); background: var(--panel-2); }
+.slot.is-checked { border-color: var(--accent); background: var(--accent-soft); }
+.slot input { margin: 0; accent-color: var(--accent-fill); }
+.slot-time { color: var(--accent-ink); font-size: 13px; }
+.slot-body { display: flex; flex-direction: column; min-width: 0; }
+.slot-title { font-weight: 600; }
+.slot-meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+.meet-message { display: flex; flex-direction: column; gap: 4px; }
+.meet-message-label { color: var(--text-2); font-size: 12.5px; }
+.meet-message input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.meet-message input::placeholder { color: var(--muted); }
+.meet-message input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+.meet-error { margin: 0; color: var(--danger); font-size: 13px; }
+.meet-actions { display: flex; justify-content: flex-end; }
+
+.meet-sent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--text);
+}
+.meet-sent svg { flex: none; color: var(--warn); }
+
+@media (max-width: 479px) {
+  .meet-panel { padding: 10px; }
+  .meet-actions .btn-primary { width: 100%; justify-content: center; }
+}

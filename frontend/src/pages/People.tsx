@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { LoaderCircle, Search, SearchX, X } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
+import type { ConnectResponse, Meeting } from '../components/connect/types.ts'
 import MatchFilters from '../components/people/MatchFilters.tsx'
 import PersonCard from '../components/people/PersonCard.tsx'
 import { WHY_FILTER } from '../components/people/fields.ts'
 import type { FilterKey, Filters, Kind, MatchResponse, Why } from '../components/people/types.ts'
 import '../styles/people.css'
+import '../styles/connect.css'
 
 const KINDS: { value: Kind; label: string }[] = [
   { value: 'attendee', label: 'Attendees' },
@@ -24,6 +26,9 @@ export default function People() {
     data: null,
     failed: false,
   })
+  // Meet: who the user already asked (pending) and who they are meeting (confirmed), by person id.
+  const [requested, setRequested] = useState<Set<string>>(new Set())
+  const [meetings, setMeetings] = useState<Map<string, Meeting>>(new Map())
   const params = { user_id: DEMO_USER, kind, q, size: 30, ...filters }
   const key = JSON.stringify(params)
   const { data, failed } = res
@@ -45,6 +50,19 @@ export default function People() {
       })
     return () => ctrl.abort()
   }, [key])
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    getJSON<ConnectResponse>('connect', { user_id: DEMO_USER }, { signal: ctrl.signal })
+      .then((c) => {
+        setRequested(new Set(c.outgoing.map((m) => m.with_id)))
+        setMeetings(new Map(c.meetings.map((m) => [m.with_id, m])))
+      })
+      .catch((err: unknown) => !ctrl.signal.aborted && console.warn('connections failed', err))
+    return () => ctrl.abort()
+  }, [])
+
+  const addRequested = (m: Meeting) => setRequested((prev) => new Set(prev).add(m.with_id))
 
   const toggle = (key: FilterKey, value: string) =>
     setFilters((f) => {
@@ -151,7 +169,14 @@ export default function People() {
           <ol className={loading ? 'people-list is-stale' : 'people-list'}>
             {results.map((p) => (
               <li key={p.id}>
-                <PersonCard person={p} onWhy={applyWhy} />
+                <PersonCard
+                  person={p}
+                  onWhy={applyWhy}
+                  userId={DEMO_USER}
+                  requested={requested.has(p.id)}
+                  meeting={meetings.get(p.id)}
+                  onRequested={addRequested}
+                />
               </li>
             ))}
           </ol>

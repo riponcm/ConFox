@@ -1,10 +1,19 @@
 import SessionCard from '../SessionCard.tsx'
+import AgendaButton from './AgendaButton.tsx'
+import { canAdd, type ToggleAgenda } from './agenda.ts'
 import { dayLabel } from './time.ts'
 import type { SearchResponse } from './types.ts'
 
-type Props = { data: SearchResponse; day: string; onPickDay: (day: string) => void }
+type Props = {
+  data: SearchResponse
+  day: string
+  onPickDay: (day: string) => void
+  /** Session ids on the user's agenda (from GET /api/agenda); search results do not carry it. */
+  agendaIds?: Set<string>
+  onToggleAgenda?: ToggleAgenda
+}
 
-export default function SearchResults({ data, day, onPickDay }: Props) {
+export default function SearchResults({ data, day, onPickDay, agendaIds, onToggleAgenda }: Props) {
   const days = (data.facets?.day ?? []).filter((b) => b.count > 0)
   return (
     <section className="sch-results" aria-label="Search results">
@@ -41,7 +50,18 @@ export default function SearchResults({ data, day, onPickDay }: Props) {
               {/* The shared SessionCard (built by FIZ55) renders search results; the day shows when it differs. */}
               <SessionCard
                 session={s}
-                aside={s.day && s.day !== day ? <span className="sch-muted">{dayLabel(s.day)}</span> : undefined}
+                aside={
+                  <div className="sch-result-aside">
+                    {s.day && s.day !== day && <span className="sch-muted">{dayLabel(s.day)}</span>}
+                    {onToggleAgenda && canAdd(s) && (
+                      <AgendaButton
+                        title={s.title}
+                        on={agendaIds?.has(s.id) ?? false}
+                        onToggle={() => onToggleAgenda(s.id, agendaIds?.has(s.id) ?? false)}
+                      />
+                    )}
+                  </div>
+                }
               />
             </li>
           ))}
