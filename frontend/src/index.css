@@ -255,3 +255,54 @@ button { font: inherit; color: inherit; }
   }
   .rail-primary .rail-label, .rail-more > .rail-link .rail-label { max-width: 100%; }
 }
+
+/* SessionCard */
+.session-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+.session-card-button { cursor: pointer; }
+.session-card-button:hover { background: var(--panel-2); }
+.session-card-main { min-width: 0; flex: 1; }
+.session-card-meta, .session-card-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.session-card-meta { color: var(--muted); }
+.session-card-title {
+  display: -webkit-box;
+  margin: 8px 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 16px;
+  line-height: 1.35;
+}
+.session-card-badge {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.session-card-badge-keynote { background: var(--accent-soft); color: var(--accent); }
+.session-card-badge-food { background: var(--warn-soft); color: var(--warn); }
+.session-card-detail + .session-card-detail { margin-top: 6px; }
+.session-card-detail span, .session-card-track { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-card-track { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.session-card-aside { flex: none; }
