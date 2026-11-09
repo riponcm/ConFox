@@ -79,3 +79,16 @@
   .meet-panel { padding: 10px; }
   .meet-actions .btn-primary { width: 100%; justify-content: center; }
 }
+
+/* Requested + withdraw, sample marker on a meeting chip */
+.meet-requested { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.meet-requested .meet-button { margin-left: 0; }
+.meet-withdraw {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 8px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer;
+}
+.meet-withdraw:hover { background: var(--panel-2); color: var(--text); }
+.meet-withdraw:disabled { opacity: 0.6; cursor: default; }
+.meet-sample { margin-left: 6px; font-size: 11px; padding: 1px 7px; }
+.meet-error { margin: 6px 0 0; color: var(--danger); font-size: 12.5px; }

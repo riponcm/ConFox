@@ -15,7 +15,7 @@ export type SlotsResponse = { slots: Slot[] }
 export type Meeting = {
   id: string
   kind: 'meeting'
-  status: 'pending' | 'confirmed' | 'declined'
+  status: 'pending' | 'confirmed' | 'declined' | 'withdrawn'
   /** A pending meeting without a direction is a request someone sent the user. */
   direction?: 'incoming' | 'outgoing'
   with_id: string

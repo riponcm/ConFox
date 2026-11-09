@@ -53,8 +53,20 @@ def _food_sessions() -> list[dict]:
 
 
 def _slots(with_id: str, items: list[dict]) -> list[dict]:
-    kinds = store.session_kinds([i.get("session_id") or "" for i in items])
-    return store.free_slots(_food_sessions(), items, kinds, with_id, now())
+    """Breaks free for both: the user's calendar and the other person's own agenda are both checked."""
+    theirs = store.user_items(with_id)
+    kinds = store.session_kinds([i.get("session_id") or "" for i in items + theirs])
+    return store.free_slots(_food_sessions(), items, kinds, with_id, now(), other_items=theirs)
+
+
+def _set_status(item: dict, status: str, extra: dict | None = None) -> dict:
+    """Update this meeting and, when it came from a request, the other person's copy of it too."""
+    change = {"status": status} | (extra or {})
+    ids = {item["id"]} | {i["id"] for i in store.linked_items(item.get("request_id") or "")}
+    for doc_id in ids:
+        es.update(index=settings.idx_agenda, id=doc_id, doc=change)
+    store.refresh()
+    return item | change
 
 
 def _own_item(item_id: str, user_id: str) -> dict:
@@ -71,10 +83,16 @@ def _answer(item_id: str, user_id: str, status: str, action: str) -> dict:
     span.set_attribute("confox.connect.with_id", item.get("with_id") or "")
     if item.get("status") != "pending" or store.direction(item) != "incoming":
         raise HTTPException(status_code=409, detail=f"meeting {item_id} is not a pending request to you")
-    es.update(index=settings.idx_agenda, id=item_id, doc={"status": status, "direction": "incoming"})
-    store.refresh()
+    extra: dict = {}
+    if status == "confirmed" and not item.get("room") and item.get("session_id"):
+        slot = store.get_session(item["session_id"])  # a request may name its break without the room
+        if slot and slot.get("room"):
+            extra["room"] = slot["room"]
     requests.add(1, {"action": action})
-    return item | {"status": status, "direction": "incoming"}
+    updated = _set_status(item, status, extra)  # both copies share status and room; direction stays per side
+    es.update(index=settings.idx_agenda, id=item_id, doc={"direction": "incoming"})
+    store.refresh()
+    return updated | {"direction": "incoming"}
 
 
 @router.get("/slots")
@@ -106,8 +124,14 @@ def send(body: SendRequest) -> dict:
     if store.clashing_meeting(items, body.with_id, slot["starts_at"], slot["ends_at"]):
         raise HTTPException(status_code=409, detail=f"already meeting {person['name']} at that time")
     doc_id = store.meeting_doc_id(body.user_id)
-    item = store.meeting_request(body.user_id, slot, person, body.message)
+    request_id = doc_id.rsplit("-", 1)[-1]
+    item = store.meeting_request(body.user_id, slot, person, body.message, request_id=request_id)
     es.create(index=settings.idx_agenda, id=doc_id, document=item)
+    # The recipient gets the request as an incoming item they can accept or decline.
+    sender = _person(body.user_id)
+    es.create(
+        index=settings.idx_agenda, id=store.meeting_doc_id(body.with_id), document=store.mirror_request(item, sender)
+    )
     store.refresh()
     requests.add(1, {"action": "send"})
     return item | {"id": doc_id}
@@ -121,3 +145,13 @@ def accept(item_id: str, user_id: str = Query(default_factory=lambda: settings.d
 @router.post("/{item_id}/decline")
 def decline(item_id: str, user_id: str = Query(default_factory=lambda: settings.demo_user)) -> dict:
     return _answer(item_id, user_id, "declined", "decline")
+
+
+@router.post("/{item_id}/withdraw")
+def withdraw(item_id: str, user_id: str = Query(default_factory=lambda: settings.demo_user)) -> dict:
+    """Take back a request the user sent while it is still pending; the other person's copy goes too."""
+    item = _own_item(item_id, user_id)
+    if item.get("status") != "pending" or store.direction(item) != "outgoing":
+        raise HTTPException(status_code=409, detail=f"meeting {item_id} is not a pending request you sent")
+    requests.add(1, {"action": "withdraw"})
+    return _set_status(item, "withdrawn")

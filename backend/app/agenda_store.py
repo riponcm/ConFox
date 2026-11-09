@@ -75,9 +75,12 @@ def trim_message(message: str | None) -> str:
     return " ".join((message or "").split())[:MESSAGE_CHARS]
 
 
-def meeting_request(user_id: str, slot: dict, person: dict, message: str | None, at: datetime | None = None) -> dict:
+def meeting_request(
+    user_id: str, slot: dict, person: dict, message: str | None, at: datetime | None = None, request_id: str = ""
+) -> dict:
     """A pending outgoing meeting at a food or coffee break. `slot` is a break session with `id`."""
     return {
+        "request_id": request_id,
         "user_id": user_id,
         "kind": "meeting",
         "status": "pending",
@@ -92,6 +95,16 @@ def meeting_request(user_id: str, slot: dict, person: dict, message: str | None,
         "message": trim_message(message),
         "sample": False,
         "created_at": stamp(at),
+    }
+
+
+def mirror_request(request: dict, sender: dict) -> dict:
+    """The same request as the recipient sees it: theirs, incoming, from the sender."""
+    return request | {
+        "user_id": request["with_id"],
+        "direction": "incoming",
+        "with_id": sender["id"],
+        "with_name": sender.get("name") or sender["id"],
     }
 
 
@@ -150,10 +163,12 @@ def free_slots(
     with_id: str,
     at: datetime,
     limit: int = MAX_SLOTS,
+    other_items: list[dict] | None = None,
 ) -> list[dict]:
     """Food and coffee breaks both people could meet at, earliest first: today from `at` on, then the next day
     with breaks. A break is taken when it overlaps a confirmed item of the user (co-located days aside) or a
-    pending or confirmed meeting with the same person. `food` are `is_food` sessions with `id`."""
+    pending or confirmed meeting with the same person, or a confirmed item of the other person (`other_items`).
+    `food` are `is_food` sessions with `id`."""
     now_iso = stamp(at)
     today = at.date().isoformat()
     upcoming = sorted(
@@ -162,7 +177,9 @@ def free_slots(
     )
     later_days = sorted({f["starts_at"][:10] for f in upcoming if f["starts_at"][:10] > today})
     days = {today, *later_days[:1]}
-    taken = blocking(items, kind_by_session) + meetings_with(items, with_id)
+    taken = (
+        blocking(items, kind_by_session) + meetings_with(items, with_id) + blocking(other_items or [], kind_by_session)
+    )
     slots = []
     for f in upcoming:
         if f["starts_at"][:10] not in days:
@@ -210,6 +227,14 @@ def user_items(user_id: str, day: str | None = None) -> list[dict]:
         sort=[{"starts_at": "asc"}],
         size=1000,
     )
+    return [_hit(h) for h in r["hits"]["hits"]]
+
+
+def linked_items(request_id: str) -> list[dict]:
+    """Both sides of one meeting request."""
+    if not request_id:
+        return []
+    r = es.search(index=settings.idx_agenda, query={"term": {"request_id": request_id}}, size=10)
     return [_hit(h) for h in r["hits"]["hits"]]
 
 

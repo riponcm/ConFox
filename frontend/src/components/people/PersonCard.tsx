@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { Check, Coffee, Users, X } from 'lucide-react'
+import { Check, Coffee, Undo2, Users, X } from 'lucide-react'
+import { postJSON } from '../../api.ts'
 import MeetPanel from '../connect/MeetPanel.tsx'
 import type { Meeting } from '../connect/types.ts'
 import { dayLabel, hhmm } from '../schedule/time.ts'
@@ -11,21 +12,41 @@ type Props = {
   person: MatchResult
   onWhy: (why: Why) => void
   userId: string
-  /** The user already sent this person a request that is still pending. */
-  requested?: boolean
+  /** A request the user sent this person that is still pending, if any. */
+  request?: Meeting
   /** A confirmed meeting with this person, if any. */
   meeting?: Meeting
   onRequested?: (meeting: Meeting) => void
+  onWithdrawn?: (personId: string) => void
 }
 
-export default function PersonCard({ person, onWhy, userId, requested = false, meeting, onRequested }: Props) {
+export default function PersonCard({ person, onWhy, userId, request, meeting, onRequested, onWithdrawn }: Props) {
   const role = [person.title, person.company].filter(Boolean).join(' · ')
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState<Meeting | null>(null)
   const meetRef = useRef<HTMLButtonElement>(null)
   const confirmRef = useRef<HTMLParagraphElement>(null)
   const panelId = `meet-${person.id}`
-  const isRequested = requested || sent !== null
+  const pending = sent ?? request ?? null
+  const isRequested = pending !== null
+  const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawFailed, setWithdrawFailed] = useState(false)
+
+  const withdraw = async () => {
+    if (!pending) return
+    setWithdrawing(true)
+    setWithdrawFailed(false)
+    try {
+      await postJSON(`connect/${encodeURIComponent(pending.id)}/withdraw?user_id=${encodeURIComponent(userId)}`, {})
+      setSent(null)
+      onWithdrawn?.(person.id)
+      requestAnimationFrame(() => meetRef.current?.focus())
+    } catch {
+      setWithdrawFailed(true)
+    } finally {
+      setWithdrawing(false)
+    }
+  }
 
   const close = () => {
     setOpen(false)
@@ -51,10 +72,22 @@ export default function PersonCard({ person, onWhy, userId, requested = false, m
             </span>
           )}
           {isRequested ? (
-            <button type="button" className="btn-primary meet-button is-requested" disabled>
-              <Check size={15} aria-hidden="true" />
-              Requested
-            </button>
+            <span className="meet-requested">
+              <button type="button" className="btn-primary meet-button is-requested" disabled>
+                <Check size={15} aria-hidden="true" />
+                Requested
+              </button>
+              <button
+                type="button"
+                className="meet-withdraw"
+                onClick={withdraw}
+                disabled={withdrawing}
+                aria-label={`Withdraw the request to ${person.name}`}
+              >
+                <Undo2 size={13} aria-hidden="true" />
+                {withdrawing ? 'Withdrawing' : 'Withdraw'}
+              </button>
+            </span>
           ) : (
             <button
               ref={meetRef}
@@ -79,6 +112,16 @@ export default function PersonCard({ person, onWhy, userId, requested = false, m
               {meeting.title} together {dayLabel(meeting.starts_at.slice(0, 10))} at{' '}
               <time dateTime={meeting.starts_at}>{hhmm(meeting.starts_at)}</time>
             </span>
+            {meeting.sample && (
+              <span className="chip chip-warn meet-sample" title="Generated sample meeting">
+                Sample
+              </span>
+            )}
+          </p>
+        )}
+        {withdrawFailed && (
+          <p className="meet-error" role="alert">
+            Could not withdraw the request. Try again.
           </p>
         )}
         {person.why.length > 0 && (

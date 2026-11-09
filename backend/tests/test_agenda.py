@@ -8,6 +8,7 @@ from app.agenda_store import (
     free_slots,
     meeting_request,
     meeting_title,
+    mirror_request,
     session_doc_id,
     session_item,
     split_agenda,
@@ -143,3 +144,20 @@ def test_split_agenda_sorts_confirmed_and_lists_pending():
 def test_clashing_meeting_only_with_the_same_person():
     assert clashing_meeting(SEED, "alice", f"{MON}T10:48:00", f"{MON}T11:03:00") is COFFEE_ALICE
     assert clashing_meeting(SEED, "bob", f"{MON}T10:48:00", f"{MON}T11:03:00") is None
+
+
+def test_slots_also_check_the_other_persons_calendar():
+    theirs = [{"kind": "meeting", "status": "confirmed", "with_id": "carol", "user_id": "bob",
+               "starts_at": f"{MON}T12:46:00", "ends_at": f"{MON}T13:30:00"}]  # fmt: skip
+    assert "mon-lunch" in ids(free_slots(FOOD, SEED, KINDS, "bob", NOW))
+    assert "mon-lunch" not in ids(free_slots(FOOD, SEED, KINDS, "bob", NOW, other_items=theirs))
+
+
+def test_mirror_request_is_the_recipients_incoming_copy():
+    slot = food("mon-coffee-pm", MON, "14:48", "15:03")
+    sent = meeting_request("emma", slot, {"id": "maya", "name": "Maya Martins"}, "hi", NOW, request_id="ab12cd34")
+    theirs = mirror_request(sent, {"id": "emma", "name": "Emma Carter"})
+    assert theirs["user_id"] == "maya" and theirs["direction"] == "incoming"
+    assert theirs["with_id"] == "emma" and theirs["with_name"] == "Emma Carter"
+    assert theirs["request_id"] == sent["request_id"] == "ab12cd34"
+    assert theirs["starts_at"] == sent["starts_at"] and theirs["status"] == "pending"

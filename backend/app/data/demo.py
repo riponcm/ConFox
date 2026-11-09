@@ -11,6 +11,7 @@ def emma_monday(sessions: list[dict], people: list[dict]) -> list[dict]:
         if s["day"] == DEMO_DAY and s["kind"] == "colocated" and s["title"].startswith(COLOCATED_TITLE)
     )
     coffee = next(s for s in sessions if s["day"] == DEMO_DAY and s["kind"] == "break" and s["title"] == "Coffee Break")
+    lunch = next(s for s in sessions if s["day"] == DEMO_DAY and s.get("is_food") and s["title"].startswith("Lunch"))
     requester = next(p for p in people if p["id"] == "att-001")
     base = {"user_id": "emma", "sample": True}
     return [
@@ -44,6 +45,8 @@ def emma_monday(sessions: list[dict], people: list[dict]) -> list[dict]:
             "status": "pending",
             "with_id": requester["id"],
             "with_name": requester["name"],
+            "session_id": lunch["id"],
+            "room": lunch["room"],
             "title": "Lunch",
             "starts_at": f"{DEMO_DAY}T12:46:00",
             "ends_at": f"{DEMO_DAY}T13:30:00",
