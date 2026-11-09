@@ -33,6 +33,9 @@ PLACES = [
     ("São Paulo", "Brazil"),
     ("Tokyo", "Japan"),
 ]
+# Every 13th generated attendee also studied here, so alumni matching has a second, smaller network to find.
+# Assigned without the random generator, so every other generated value stays the same.
+SECOND_SCHOOL, SECOND_SCHOOL_EVERY = "BUET", 13
 COMPANIES = ["Wasatch Cloud", "Redwood Labs", "Northbeam", "Harborline", "Copperleaf", "Bluefin Data", "Lumen Grid"]
 TITLES = ["Platform Engineer", "SRE", "Software Engineer", "ML Engineer", "DevOps Lead", "Engineering Manager"]
 COMMUNITIES = ["CNCF Ambassadors", "Women in Cloud Native", "Kubernetes contributors", "Local meetup organisers"]
@@ -109,7 +112,7 @@ def sample_attendees(n: int = 80) -> list[dict]:
                     "company": rng.choice(COMPANIES),
                     "bio": f"Works on {interests[0].lower()} and {interests[3]}.",
                     "interests": interests,
-                    "schools": [rng.choice(SCHOOLS)],
+                    "schools": [rng.choice(SCHOOLS)] + ([SECOND_SCHOOL] if i % SECOND_SCHOOL_EVERY == 0 else []),
                     "past_companies": rng.sample(COMPANIES, 1),
                     "communities": rng.sample(COMMUNITIES, rng.randint(0, 2)),
                     "city": city,

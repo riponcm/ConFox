@@ -22,6 +22,7 @@ TOKENS = meter.create_counter("confox.embeddings.tokens", unit="{token}", descri
 COST = meter.create_counter("confox.embeddings.cost", unit="USD", description="Estimated embedding cost")
 
 BATCH = 100
+EMBED_CHARS = 2000
 # US dollars per million input tokens (OpenAI list prices).
 PRICE_PER_MTOK = {"text-embedding-3-small": 0.02, "text-embedding-3-large": 0.13}
 
@@ -33,6 +34,18 @@ def enabled() -> bool:
 @cache
 def _client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key.strip())
+
+
+def join_text(*parts) -> str:
+    """Non-empty parts on their own lines (lists joined with commas), trimmed to EMBED_CHARS."""
+    flat = [", ".join(p) if isinstance(p, list) else p for p in parts]
+    return "\n".join(str(p).strip() for p in flat if p)[:EMBED_CHARS]
+
+
+def person_text(p: dict) -> str:
+    """What a person is about, for their embedding. Shared by the loader and profile saves, so a saved profile is
+    embedded exactly like a loaded one."""
+    return join_text(p["name"], p.get("title"), p.get("company"), p.get("interests_text"), p.get("bio"))
 
 
 def cost_usd(model: str, tokens: int) -> float:

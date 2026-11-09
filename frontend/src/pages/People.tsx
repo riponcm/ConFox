@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { LoaderCircle, Search, SearchX, X } from 'lucide-react'
+import { LoaderCircle, Search, SearchX, X, UserPen } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
 import ConnectionsTab from '../components/connect/ConnectionsTab.tsx'
 import type { ConnectResponse, Meeting } from '../components/connect/types.ts'
@@ -12,6 +12,8 @@ import type { FilterKey, Filters, Kind, MatchResponse, Why } from '../components
 import '../styles/people.css'
 import '../styles/connect.css'
 import '../styles/groups.css'
+import { useProfile } from '../profile.ts'
+import '../styles/profile.css'
 
 const KINDS: { value: Kind; label: string }[] = [
   { value: 'attendee', label: 'Attendees' },
@@ -59,7 +61,9 @@ export default function People() {
   const [requested, setRequested] = useState<Map<string, Meeting>>(new Map())
   const [meetings, setMeetings] = useState<Map<string, Meeting>>(new Map())
   const params = { user_id: DEMO_USER, kind, q, size: 30, ...filters }
-  const key = JSON.stringify(params)
+  // The ranking follows the saved profile: a save bumps the version, which is part of the request key.
+  const { version: profileVersion, openEditor } = useProfile()
+  const key = JSON.stringify([params, profileVersion])
   const { data, failed } = res
   const loading = res.key !== key
 
@@ -70,7 +74,7 @@ export default function People() {
 
   useEffect(() => {
     const ctrl = new AbortController()
-    getJSON<MatchResponse>('people/match', JSON.parse(key), { signal: ctrl.signal })
+    getJSON<MatchResponse>('people/match', JSON.parse(key)[0], { signal: ctrl.signal })
       .then((next) => setRes({ key, data: next, failed: false }))
       .catch((err: unknown) => {
         if (ctrl.signal.aborted) return
@@ -146,7 +150,13 @@ export default function People() {
   return (
     <section className="page people-page" aria-labelledby="page-title">
       <h1 id="page-title">People</h1>
-      <p className="page-lead">{TABS.find((t) => t.value === tab)?.lead}</p>
+      <p className="page-lead">
+        {TABS.find((t) => t.value === tab)?.lead}{' '}
+        <button type="button" className="pf-edit-link" onClick={openEditor}>
+          <UserPen size={14} aria-hidden="true" />
+          Edit profile
+        </button>
+      </p>
 
       <div className="people-tabs" role="tablist" aria-label="People views" onKeyDown={onTabKey}>
         {TABS.map((t) => (

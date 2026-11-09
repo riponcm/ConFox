@@ -116,3 +116,17 @@ def test_truncate():
     assert truncate("short") == "short"
     assert len(truncate("x" * 500)) == 300
     assert truncate(None) == ""
+
+
+def test_profile_tracks_mark_sessions_in_that_track():
+    talk = session("t", "11:00", "11:30", "Hardening clusters") | {"track": "Security"}
+    assert for_you(talk, [], tracks=["Security"]) == (True, ["in your track Security"], 0.65)
+    assert for_you(talk, [], tracks=["Observability"]) == (False, [], 0.0)
+    out = annotate([talk], {"interests": [], "tracks": ["Security"]}, [])
+    assert out[0]["for_you"] and out[0]["why"] == ["in your track Security"]
+
+
+def test_profile_projects_count_as_interest_phrases():
+    talk = session("e", "11:17", "11:22", "eBPF Observability with Inspektor Gadget")
+    out = annotate([talk], {"interests": [], "projects": ["eBPF"]}, [])
+    assert out[0]["for_you"] and out[0]["why"] == ["matches eBPF"]

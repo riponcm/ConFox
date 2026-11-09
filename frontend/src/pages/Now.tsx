@@ -7,6 +7,7 @@ import { hhmm, roomLabel, timeRange } from '../components/schedule/time.ts'
 import type { Session } from '../types.ts'
 import SessionLink from '../components/session/SessionLink.tsx'
 import '../styles/now.css'
+import { useProfileVersion } from '../profile.ts'
 
 type Food = { session: Session; status: 'now' | 'next'; minutes: number }
 type AgendaItem = { title: string; kind: string; with_name?: string; starts_at: string; ends_at: string; room?: string }
@@ -234,12 +235,13 @@ export default function Now() {
   const [failed, setFailed] = useState(false)
 
   const agendaVersion = useAgendaVersion()
+  const profileVersion = useProfileVersion()
 
   useEffect(() => {
     getJSON<NowResponse>('now', { user_id: DEMO_USER })
       .then(setData)
       .catch(() => setFailed(true))
-  }, [agendaVersion]) // refetch when the session drawer changes the agenda
+  }, [agendaVersion, profileVersion]) // refetch after agenda or profile changes
 
   return (
     <section className="page now" aria-labelledby="page-title">

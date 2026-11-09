@@ -35,6 +35,7 @@ export const WHY_FILTER: Record<WhyField, FilterKey | 'q'> = {
   company: 'company',
   communities: 'community',
   city: 'city',
+  country: 'country',
   interests: 'interest',
   q: 'q',
 }

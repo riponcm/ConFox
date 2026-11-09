@@ -23,7 +23,6 @@ gaps and summary are pure functions below, tested without Elasticsearch.
 import logging
 from datetime import datetime
 
-from elasticsearch import ApiError
 from fastapi import APIRouter, Query
 from opentelemetry import trace
 
@@ -31,7 +30,7 @@ from ..clock import now as clock_now
 from ..config import settings
 from ..es import es
 from ..now import next_food
-from .people import SOURCE_EXCLUDES, _load_user, build_match_query, why
+from .people import _load_user, rank_people, why
 from .schedule import _day_sessions, _knn, annotate
 
 log = logging.getLogger(__name__)
@@ -293,23 +292,10 @@ def _agenda(user_id: str) -> list[dict]:
 
 
 def _ranked_people(user_id: str, user: dict, vector: list | None) -> list[dict]:
-    """The Match ranking (same query as /api/people/match), lexical if vector scoring fails."""
-
-    def run(vec: list | None) -> dict:
-        query = build_match_query(user_id, user, vector=vec)
-        return es.search(
-            index=settings.idx_people, query=query, size=PEOPLE_CANDIDATES, source_excludes=SOURCE_EXCLUDES
-        )
-
-    try:
-        res = run(vector)
-    except ApiError as exc:
-        if not vector:
-            raise
-        log.warning("brief: vector scoring failed, ranking people lexically: %s", exc)
-        trace.get_current_span().record_exception(exc)
-        res = run(None)
-    return [h["_source"] | {"id": h["_id"]} for h in res["hits"]["hits"]]
+    """The Match ranking for the current profile (same pipeline as /api/people/match), best first."""
+    ranked, _, mode = rank_people(user_id, user, vector, size=PEOPLE_CANDIDATES)
+    trace.get_current_span().set_attribute("confox.brief.people_mode", mode)
+    return ranked
 
 
 @router.get("")

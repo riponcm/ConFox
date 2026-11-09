@@ -5,6 +5,7 @@ import { DEMO_USER, getJSON } from '../../api.ts'
 import { roomLabel } from '../schedule/time.ts'
 import type { Session } from '../../types.ts'
 import { type DashboardData, dayLabel, fmt, hhmm, hours, plural } from './types.ts'
+import { useProfileVersion } from '../../profile.ts'
 
 type NowSummary = {
   on_now_total: number
@@ -44,12 +45,13 @@ export default function DashTiles({ data }: { data: DashboardData }) {
   const [failed, setFailed] = useState(false)
 
   const agendaVersion = useAgendaVersion()
+  const profileVersion = useProfileVersion()
 
   useEffect(() => {
     getJSON<NowSummary>('now', { user_id: DEMO_USER })
       .then(setNow)
       .catch(() => setFailed(true))
-  }, [agendaVersion]) // refetch when the session drawer changes the agenda
+  }, [agendaVersion, profileVersion]) // refetch after agenda or profile changes
 
   const people = data.people
   const peopleTile = (

@@ -29,6 +29,7 @@ import type {
   SearchResponse,
 } from '../components/schedule/types.ts'
 import '../styles/schedule.css'
+import { useProfileVersion } from '../profile.ts'
 
 // Sunday holds registration and one pre-event; the guide's days start Monday.
 const FIRST_DAY = '2026-11-09'
@@ -60,6 +61,8 @@ export default function Schedule() {
   const openProfile = useOpenProfile()
   // Bumped when the session drawer changes the agenda: reload the day and the agenda ids.
   const agendaVersion = useAgendaVersion()
+  // For you follows the saved profile; a save bumps the version and the day reloads.
+  const profileVersion = useProfileVersion()
 
   const [meta, setMeta] = useState<Meta | null>(null)
   const [days, setDays] = useState<string[]>([])
@@ -105,7 +108,7 @@ export default function Schedule() {
       .then((data) => setDayAnswer({ key: day, data }))
       .catch(() => !ctrl.signal.aborted && setDayAnswer({ key: day, failed: true }))
     return () => ctrl.abort()
-  }, [day, meta, agendaVersion])
+  }, [day, meta, agendaVersion, profileVersion])
 
   useEffect(() => {
     if (!meta) return

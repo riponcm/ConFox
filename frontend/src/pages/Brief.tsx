@@ -8,6 +8,7 @@ import PeopleToday from '../components/brief/PeopleToday.tsx'
 import { longDay } from '../components/brief/types.ts'
 import type { BriefResponse } from '../components/brief/types.ts'
 import '../styles/brief.css'
+import { useProfileVersion } from '../profile.ts'
 
 export default function Brief() {
   const [data, setData] = useState<BriefResponse | null>(null)
@@ -24,7 +25,9 @@ export default function Brief() {
       .catch(() => setFailed(true))
   }, [])
 
-  useEffect(fetchBrief, [fetchBrief, agendaVersion])
+  // Suggested people and sessions follow the saved profile; a save bumps the version and the brief reloads.
+  const profileVersion = useProfileVersion()
+  useEffect(fetchBrief, [fetchBrief, agendaVersion, profileVersion])
 
   const load = () => {
     setFailed(false)

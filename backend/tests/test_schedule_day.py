@@ -111,3 +111,30 @@ def test_summary_and_facets():
     assert facets["level"] == [{"key": "Beginner", "count": 1}]
     assert facets["venue"][0] == {"key": "Hyatt", "count": 2}
     assert day_facets([])["track"] == []
+
+
+def test_top_matches_uses_the_people_ranking(monkeypatch):
+    """Going names come from the same ranking as People; a signature change there must not break the day view."""
+    from app.routers import schedule
+
+    calls = []
+
+    def fake_rank(user_id, user, vector, q="", kind=None, post=None, aggs=None, size=20):
+        calls.append((user_id, size))
+        return [{"id": "alice", "name": "Alice Moreno"}], {}, "bm25"
+
+    monkeypatch.setattr(schedule, "rank_people", fake_rank)
+    assert schedule._top_matches("emma", {"interests": ["AI inference"]}, None) == [
+        {"id": "alice", "name": "Alice Moreno"}
+    ]
+    assert calls == [("emma", schedule.FRIENDS)]
+
+
+def test_top_matches_is_empty_when_ranking_fails(monkeypatch):
+    from app.routers import people, schedule
+
+    def failing(*_args, **_kwargs):
+        raise people.SearchFailed("people index is rebuilding")
+
+    monkeypatch.setattr(schedule, "rank_people", failing)
+    assert schedule._top_matches("emma", {"interests": ["AI inference"]}, None) == []
