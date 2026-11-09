@@ -10,6 +10,8 @@ log = logging.getLogger(__name__)
 # Schedule times are local conference time (America/Denver) without an offset, as the source publishes them.
 LOCAL_TIME = {"type": "date", "format": "strict_date_hour_minute_second"}
 TEXT_KW = {"type": "text", "fields": {"raw": {"type": "keyword", "ignore_above": 512}}}
+# Semantic search vector. Elasticsearch 9 keeps it out of `_source` unless a request asks for it.
+EMBEDDING = {"type": "dense_vector", "dims": settings.embed_dims, "similarity": "cosine", "index": True}
 
 MAPPINGS: dict[str, dict] = {
     settings.idx_sessions: {
@@ -33,6 +35,7 @@ MAPPINGS: dict[str, dict] = {
             "sponsored": {"type": "boolean"},
             "end_user": {"type": "boolean"},
             "slides_url": {"type": "keyword", "index": False},
+            "embedding": EMBEDDING,
         }
     },
     settings.idx_people: {
@@ -52,6 +55,7 @@ MAPPINGS: dict[str, dict] = {
             "country": {"type": "keyword"},
             "session_ids": {"type": "keyword"},
             "picture": {"type": "keyword", "index": False},
+            "embedding": EMBEDDING,
         }
     },
     settings.idx_agenda: {
