@@ -19,16 +19,16 @@ def sessions(raw):
 
 
 def test_strip_emoji():
-    assert strip_emoji("☕ Coffee Break") == "Coffee Break"
-    assert strip_emoji("⚡ Lightning Talks") == "Lightning Talks"
-    assert strip_emoji("🍲 Lunch | On Own") == "Lunch | On Own"
+    assert strip_emoji("\u2615 Coffee Break") == "Coffee Break"
+    assert strip_emoji("\u26a1 Lightning Talks") == "Lightning Talks"
+    assert strip_emoji("\U0001f372 Lunch | On Own") == "Lunch | On Own"
 
 
 @pytest.mark.parametrize(
     ("track", "title", "expected"),
     [
-        ("Project Lightning Talks", "☕ Coffee Break", ("break", True)),
-        ("Breaks", "🍲 Lunch", ("break", True)),
+        ("Project Lightning Talks", "\u2615 Coffee Break", ("break", True)),
+        ("Breaks", "\U0001f372 Lunch", ("break", True)),
         ("Keynote Sessions", "Opening Keynote", ("keynote", False)),
         ("CNCF-hosted Co-located Events", "ArgoCon", ("colocated", False)),
         ("Lightning Talks", "Five minutes on eBPF", ("lightning", False)),

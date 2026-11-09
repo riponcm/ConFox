@@ -1,8 +1,8 @@
 """Turn the raw Sessionize export into session documents.
 
 The export groups tags into categories; the "All Sessions" category is the track. Kinds are derived from the
-track and the title. Titles and track names can start with emoji ("☕ Coffee Break", "⚡ Lightning Talks"), so text
-is normalised before matching.
+track and the title. Titles and track names can start with emoji (a coffee cup before "Coffee Break", a
+lightning bolt before "Lightning Talks"), so text is normalised before matching.
 """
 
 import re
@@ -36,7 +36,7 @@ KIND_BY_TRACK = {
 
 
 def strip_emoji(text: str) -> str:
-    """Drop emoji and other symbols, then tidy whitespace: '☕ Coffee Break' -> 'Coffee Break'."""
+    """Drop emoji and other symbols, then tidy whitespace: "\u2615 Coffee Break" -> "Coffee Break"."""
     kept = "".join(ch for ch in text if unicodedata.category(ch) not in ("So", "Sk", "Cs", "Mn", "Cf"))
     return re.sub(r"\s+", " ", kept).strip()
 

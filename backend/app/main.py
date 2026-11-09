@@ -25,7 +25,7 @@ def health() -> dict[str, str]:
     cause and recorded on the current span.
     """
     try:
-        es_status = es.cluster.health()["status"]
+        es_status = es.options(request_timeout=5).cluster.health()["status"]
     except Exception as exc:
         log.warning("Elasticsearch health check failed: %s", exc, exc_info=exc)
         trace.get_current_span().record_exception(exc)
