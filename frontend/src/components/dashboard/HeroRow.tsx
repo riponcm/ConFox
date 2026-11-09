@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CalendarCheck, Coffee, Radio } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../../api.ts'
+import { useProfileVersion } from '../../profile.ts'
 import { hhmm, roomLabel } from '../schedule/time.ts'
 import type { Session } from '../../types.ts'
 
@@ -14,12 +15,13 @@ type NowSummary = {
 /** The personal top row of the Dashboard: next coffee (from next_food()), what is on, and the user's next item. */
 export default function HeroRow() {
   const [now, setNow] = useState<NowSummary | null>(null)
+  const version = useProfileVersion() // refetch after a profile save
 
   useEffect(() => {
     getJSON<NowSummary>('now', { user_id: DEMO_USER })
       .then(setNow)
       .catch(() => setNow(null))
-  }, [])
+  }, [version])
 
   if (!now) return null
   const food = now.food

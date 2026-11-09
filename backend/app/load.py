@@ -18,7 +18,7 @@ from .data.demo import emma_monday
 from .data.people import sample_attendees, speakers
 from .data.samples import attendee_agendas, sample_activity
 from .data.sessions import build_sessions
-from .embeddings import embed, enabled
+from .embeddings import embed, enabled, join_text, person_text
 from .es import es
 from .indices import rebuild
 from .telemetry import setup_telemetry, shutdown_telemetry
@@ -26,21 +26,10 @@ from .telemetry import setup_telemetry, shutdown_telemetry
 log = logging.getLogger("confox.load")
 tracer = trace.get_tracer("confox.load")
 
-EMBED_CHARS = 2000
-
-
-def _join(*parts) -> str:
-    flat = [", ".join(p) if isinstance(p, list) else p for p in parts]
-    return "\n".join(str(p).strip() for p in flat if p)[:EMBED_CHARS]
-
 
 def session_text(s: dict) -> str:
     """What a session is about, for its embedding: title, track, projects, then the description."""
-    return _join(s["title"], s.get("track"), s.get("projects"), s.get("description"))
-
-
-def person_text(p: dict) -> str:
-    return _join(p["name"], p.get("title"), p.get("company"), p.get("interests_text"), p.get("bio"))
+    return join_text(s["title"], s.get("track"), s.get("projects"), s.get("description"))
 
 
 def with_embeddings(docs: list[dict], text) -> list[dict]:

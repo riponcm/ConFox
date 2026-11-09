@@ -1,11 +1,20 @@
 import { useEffect, useRef } from 'react'
-import { GraduationCap, X } from 'lucide-react'
-import { DEMO_PROFILE } from '../profile.ts'
+import { RefreshCw, X } from 'lucide-react'
+import type { Profile, SaveResponse } from '../profile.ts'
+import ProfileForm from './profile/ProfileForm.tsx'
+import '../styles/profile.css'
 
-type Props = { open: boolean; onClose: () => void }
+type Props = {
+  open: boolean
+  profile: Profile | null
+  failed: boolean
+  onRetry: () => void
+  onClose: () => void
+  onSaved: (res: SaveResponse) => void
+}
 
 // A native modal dialog gives focus trapping, Escape to close and focus return for free.
-export default function ProfileDrawer({ open, onClose }: Props) {
+export default function ProfileDrawer({ open, profile, failed, onRetry, onClose, onSaved }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -15,51 +24,38 @@ export default function ProfileDrawer({ open, onClose }: Props) {
     if (!open && dialog.open) dialog.close()
   }, [open])
 
+  const close = () => ref.current?.close()
+
   return (
     <dialog
       ref={ref}
-      className="drawer"
+      className="drawer profile-drawer"
       aria-labelledby="profile-drawer-title"
       onClose={onClose}
       onClick={(e) => {
         // The body fills the dialog, so a click on the dialog itself is a backdrop click.
-        if (e.target === e.currentTarget) ref.current?.close()
+        if (e.target === e.currentTarget) close()
       }}
     >
       <div className="drawer-body">
         <div className="drawer-head">
-          <h2 id="profile-drawer-title">Profile</h2>
-          <button type="button" className="icon-button" aria-label="Close profile" onClick={() => ref.current?.close()}>
+          <h2 id="profile-drawer-title">Your profile</h2>
+          <button type="button" className="icon-button" aria-label="Close profile" onClick={close}>
             <X size={18} aria-hidden="true" />
           </button>
         </div>
 
-        <div className="profile-id">
-          <span className="avatar avatar-lg" aria-hidden="true">{DEMO_PROFILE.initials}</span>
-          <div>
-            <p className="profile-name">{DEMO_PROFILE.name}</p>
-            <p className="profile-role">{DEMO_PROFILE.role}</p>
+        {/* Mounted only while open, so every opening starts from the saved profile. */}
+        {open && profile && <ProfileForm profile={profile} onSaved={onSaved} onCancel={close} />}
+        {open && !profile && !failed && <p className="pf-hint">Loading your profile&hellip;</p>}
+        {open && !profile && failed && (
+          <div className="pf-alert" role="alert">
+            <p>Could not load your profile. Is the API running?</p>
+            <button type="button" className="pf-secondary" onClick={onRetry}>
+              <RefreshCw size={15} aria-hidden="true" /> Try again
+            </button>
           </div>
-        </div>
-
-        <p className="profile-meta">
-          <GraduationCap size={16} aria-hidden="true" />
-          {DEMO_PROFILE.school}
-        </p>
-
-        <section aria-labelledby="profile-interests">
-          <h3 id="profile-interests" className="section-label">Interests</h3>
-          <ul className="chips">
-            {DEMO_PROFILE.interests.map((interest) => (
-              <li key={interest} className="chip">{interest}</li>
-            ))}
-          </ul>
-        </section>
-
-        <div>
-          <span className="chip chip-warn">Sample profile</span>
-          <p className="sample-note">Generated demo data. The demo user is signed in by default.</p>
-        </div>
+        )}
       </div>
     </dialog>
   )

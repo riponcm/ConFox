@@ -72,15 +72,56 @@ flowchart LR
 | Current or past company (any overlap) | 3 | "Works at ..." / "Worked at ..." |
 | Community | 2 each | "Both in ..." |
 | City | 2 | "Also in ..." |
-| Interest | 1.5 each | "Both into ..." |
-| User's interests as text in a speaker's tracks or bio | BM25 x 0.5 | "Speaks on ..." / "Mentions ..." |
+| Country | 1 | "Also from ..." (only when the city differs) |
+| Topic: interest, keyword or project, chosen track | 1.5 each | "Both into ..." (attendees) / "Speaks on ..." (speakers) |
+| User's topics as text in someone's interests or bio | BM25 x 0.5, lexical list only | "Speaks on ..." / "Mentions ..." |
 
-- **One query.** A `bool` of `constant_score` clauses, one per shared value, so each overlap adds a fixed, explainable amount; `minimum_should_match: 0` keeps people with nothing in common at the bottom rather than hiding them. A keyword `q` becomes a `multi_match` must clause on name, title, company, interests and bio. `kind` (Attendees or Speakers tab) is a query filter.
-- **Vectors when present.** If the user's profile has an `embedding`, the query is wrapped in `script_score` adding `4 x max(0, cosine)`. A weighted sum, not RRF: the boosts stay in charge (one shared school outweighs any embedding), scores stay readable, and aggregations and `post_filter` keep working on one plain query. If vector scoring fails (field missing mid-rebuild) the request logs a warning, records it on the span and ranks lexically; `semantic` in the response says which happened.
+- **Lexical list.** A `bool` of `constant_score` clauses, one per shared value, plus BM25 of the user's topics on `interests_text` and `bio`; `minimum_should_match: 0` keeps people with nothing in common at the bottom rather than hiding them. A keyword `q` becomes a `multi_match` must clause on name, title, company, interests and bio. `kind` (Attendees or Speakers tab) is a query filter. The user and private profiles are excluded.
+- **Hybrid ranking.** With a profile vector, the lexical list and a kNN list are fused with RRF, then the boosts are added on top. See "Profile drives matching" below; `mode` in the response says which path ran (`hybrid`, `hybrid-client`, `bm25`) and `semantic` whether the vector took part.
 - **Reasons in Python.** `why` is computed from the same overlap the query boosts, at most three, schools first, so every reason is true and clickable. Each reason names its field; clicking it applies that exact filter (`school`, `company`, `community`, `city`, `interest`) or, for a bio mention, a keyword search.
 - **Group chips.** `filters` aggregations restricted to the user's own schools, companies, communities, city and country count the other people sharing each. Background filters go in `post_filter`, so chip counts stay stable while chips are toggled.
 - **Telemetry.** Requests count on `confox.match.requests` (attributes `kind`, `has_query`, `filtered`); the request span carries `confox.match.semantic`.
 - Attendees are generated samples and every card says "Sample"; speakers are public schedule profiles.
+
+## Profile drives matching
+
+The signed-in user's profile document in `confox-people` is the input to People, For you and My brief. `GET /api/profile/{user_id}` returns the editable fields; `PUT /api/profile/{user_id}` saves them; `GET /api/profile/options` returns suggestions for the editor's chips (top attendee interests, CNCF projects and tracks from the sessions, schools with University of Utah first, current and past companies merged, communities, cities, countries), all from one `msearch` of `terms` aggregations. Code: `backend/app/routers/profile.py`; editor: `src/components/ProfileDrawer.tsx` and `src/components/profile/`.
+
+```mermaid
+flowchart LR
+  F[Profile editor] -->|PUT, validated| T[interests_text<br/>interests + projects + tracks]
+  T --> X[person_text<br/>name, title, company, interests_text, bio]
+  X -->|only if the text changed| V[embedding<br/>text-embedding-3-small]
+  V --> W[(confox-people<br/>write with refresh)]
+  W --> L[BM25 list: boosts per shared value<br/>+ topics on interests_text, bio]
+  W --> K[kNN list on the profile vector]
+  L --> R[RRF, k 60, window 100<br/>native rrf retriever or in the API]
+  K --> R
+  R --> B[score = boosts + 4 x fused rank]
+  B --> Y[why reasons from the same overlap]
+```
+
+| Step | What happens |
+|---|---|
+| Validate | Pydantic, unknown fields refused: name (1 to 80), title, company, city, country (80), bio (500), interests (12 phrases of 40), keywords or projects (20), tracks (12, each must be a schedule track), schools (8), past companies and communities (10), looking for (200), links (3 full http or https addresses), visibility `public` or `private`. Lists are trimmed and de-duplicated ignoring case. Errors come back as FastAPI 422 details per field |
+| Text | `interests_text` is rebuilt from interests, then projects, then tracks. The embedding text is `embeddings.person_text`, the same recipe the loader uses, so an edited profile and a loaded one are comparable |
+| Embedding | Recomputed only when that text changed (a new school or link costs no model call). No `OPENAI_API_KEY`: saved without a vector (`embedding: "skipped"` and a `note` in the response), and matching runs lexically. An embedding error saves without a vector too (`failed`, logged and on the span) rather than losing the edit |
+| Write | The whole document is indexed with `refresh=wait_for`, so the next request sees it. Fields the editor does not own (`kind`, `sample`, `picture`, `session_ids`) are kept. Each save also puts the profile-only fields (`projects`, `tracks`, `looking_for`, `links`, `visibility`, `updated_at`) into the mapping; additive, a no-op once present |
+| Response | `{profile, changed, embedding, note}`; `changed` lists the editable fields whose value differs |
+| Telemetry | Span `profile.save` (`confox.profile.user`, `confox.profile.changed`, `confox.profile.embedding`); counter `confox.profile.updates` (attributes `embedding`, `changed`) |
+
+**Ranking.** `/api/people/match`, `/api/schedule/day` and `/api/brief` read the profile with a realtime `get` on every request; nothing is cached, so an edit changes the very next ranking.
+
+1. **Two lists.** Lexical: the boost table in "People and Match" (shared schools, companies, communities, city, country, topics) plus BM25 of the topics on `interests_text` and `bio`. Semantic: kNN on the profile `embedding` (`k` 100, 200 candidates) under the same filters (kind, keyword, chip filters, the user and private profiles excluded).
+2. **RRF.** One request with the native `rrf` retriever (rank constant 60, window 100), with the group aggregations and the chip `post_filter` on the same request. On a basic licence the rejection is recorded (`confox.match.rrf_fallback` event), remembered for the process, and both lists come from one `msearch` and are fused in Python with the same `rrf_fuse` as session search. Any other vector failure, or no vector, ranks by the lexical list alone (`bm25`).
+3. **Boosts.** The fused score is scaled to 0..1 (first in every list is 1) and multiplied by 4, then the shared-value boosts are added in Python (`affinity`). One shared school (6) outweighs any amount of semantic closeness; within equal overlap, BM25 and the embedding decide.
+4. **Why.** `why` reads the same overlap, at most three, schools first: "BUET alumni", "Both into eBPF", "Works at ...", "Also in ...", "Speaks on ...", "Mentions ...". Every reason is a clickable filter.
+
+**For you** (Schedule and My brief) uses the same profile: interest and project phrases in the title, projects, track or description; a chosen track matching the session track ("in your track Security", fit 0.65); and the day's 12 nearest sessions to the profile vector.
+
+**Refreshing the pages.** The app shell keeps the profile and a `version` in `ProfileContext` (`src/profile.ts`). A save sets the returned profile, bumps `version`, closes the editor and shows "Profile saved · matches updated". People, Schedule, Now, the Dashboard hero row and My brief put `version` in their fetch dependencies, so they refetch without a page reload.
+
+**Sample data.** Every 13th generated attendee also lists BUET as a second school (six people), assigned without the random generator so every other generated value is unchanged; it appears after the next `--only people` load.
 
 ## Telemetry (pull request 1)
 
@@ -215,7 +256,7 @@ Ids: `{user}-s-{session_id}` for added sessions, `{user}-m-{8 hex}` for new requ
 - **People.** Every card has a primary "Meet" button that opens an inline panel: the free slots as a native radio group (first one chosen and focused), an optional line, "Send request". After sending, the card says "Request sent for 14:48 · Coffee" and the button becomes a disabled "Requested" (warn colours, since it is pending); people with a pending outgoing request show "Requested" on load, and a confirmed meeting shows as a green chip. Escape closes the panel and returns focus to the button.
 ## My brief (pull request 10)
 
-One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (day of `clock.now()`) lives in `backend/app/routers/brief.py`; the page is `src/pages/Brief.tsx` with `src/components/brief/` and `src/styles/brief.css`. Nothing new is stored: the endpoint reads `confox-sessions`, `confox-people` and `confox-agenda` and reuses the other features' helpers (schedule `_day_sessions`, `annotate`, `_knn`; Match `build_match_query`, `why`; `next_food()`).
+One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (day of `clock.now()`) lives in `backend/app/routers/brief.py`; the page is `src/pages/Brief.tsx` with `src/components/brief/` and `src/styles/brief.css`. Nothing new is stored: the endpoint reads `confox-sessions`, `confox-people` and `confox-agenda` and reuses the other features' helpers (schedule `_day_sessions`, `annotate`, `_knn`; Match `rank_people`, `why`; `next_food()`).
 
 | Part | Rule |
 |---|---|
@@ -223,7 +264,7 @@ One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (d
 | `is_next` | The first item not yet ended; a co-located day already under way is skipped while something else is still to come, so the marker moves to the coffee, then lunch |
 | `gaps` | Free windows of 60+ minutes between 08:00 and 19:00, from now on; all-day co-located events do not block (they would hide every gap) |
 | `requests` | Pending meetings today split into `incoming` (no direction counts as incoming) and `outgoing`; a request without a room takes the room of the food break at the same time |
-| `people` | The Match ranking (same query, vector when present, lexical fallback logged on the span), minus anyone the user already has a meeting, request or declined request with today; up to 3, each with the first `why` reason and `free_at`: the first food break after now that does not overlap the user's confirmed plans |
+| `people` | The Match ranking (`rank_people`, the same pipeline as People; the mode is on the span as `confox.brief.people_mode`), minus anyone the user already has a meeting, request or declined request with today; up to 3, each with the first `why` reason and `free_at`: the first food break after now that does not overlap the user's confirmed plans |
 | `suggested` | Up to 3 for-you sessions (interest phrase or kNN) not on the agenda, not started, not clashing; other co-located days and breaks left out |
 | `summary` | Plain sentences from the data, no LLM: the anchor event, confirmed meetings, waiting requests |
 

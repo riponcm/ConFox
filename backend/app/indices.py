@@ -12,6 +12,15 @@ LOCAL_TIME = {"type": "date", "format": "strict_date_hour_minute_second"}
 TEXT_KW = {"type": "text", "fields": {"raw": {"type": "keyword", "ignore_above": 512}}}
 # Semantic search vector. Elasticsearch 9 keeps it out of `_source` unless a request asks for it.
 EMBEDDING = {"type": "dense_vector", "dims": settings.embed_dims, "similarity": "cosine", "index": True}
+# Fields only the profile editor writes. Kept separate so a save can add them to an index loaded before they existed.
+PROFILE_FIELDS = {
+    "projects": {"type": "keyword"},
+    "tracks": {"type": "keyword"},
+    "looking_for": {"type": "text"},
+    "links": {"type": "keyword", "index": False},
+    "visibility": {"type": "keyword"},
+    "updated_at": LOCAL_TIME,
+}
 
 MAPPINGS: dict[str, dict] = {
     settings.idx_sessions: {
@@ -56,6 +65,7 @@ MAPPINGS: dict[str, dict] = {
             "session_ids": {"type": "keyword"},
             "picture": {"type": "keyword", "index": False},
             "embedding": EMBEDDING,
+            **PROFILE_FIELDS,
         }
     },
     settings.idx_activity: {

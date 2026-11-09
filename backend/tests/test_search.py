@@ -125,7 +125,7 @@ def test_embed_is_skipped_without_key(no_key):
 
 def test_embedding_text_is_trimmed():
     text = load.session_text({"title": "T", "track": "AI", "projects": ["vLLM", "KServe"], "description": "x" * 5000})
-    assert text.startswith("T\nAI\nvLLM, KServe\n") and len(text) == load.EMBED_CHARS
+    assert text.startswith("T\nAI\nvLLM, KServe\n") and len(text) == embeddings.EMBED_CHARS
 
 
 def test_embedding_cost():

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CalendarDays, RefreshCw, Sparkles, Users } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
+import { useProfileVersion } from '../profile.ts'
 import SessionCard from '../components/SessionCard.tsx'
 import DayTimeline from '../components/brief/DayTimeline.tsx'
 import PeopleToday from '../components/brief/PeopleToday.tsx'
@@ -11,6 +12,8 @@ import '../styles/brief.css'
 export default function Brief() {
   const [data, setData] = useState<BriefResponse | null>(null)
   const [failed, setFailed] = useState(false)
+  // Suggested people and sessions follow the saved profile; a save bumps the version and the brief reloads.
+  const version = useProfileVersion()
 
   const fetchBrief = useCallback(() => {
     getJSON<BriefResponse>('brief', { user_id: DEMO_USER })
@@ -21,7 +24,7 @@ export default function Brief() {
       .catch(() => setFailed(true))
   }, [])
 
-  useEffect(fetchBrief, [fetchBrief])
+  useEffect(fetchBrief, [fetchBrief, version])
 
   const load = () => {
     setFailed(false)

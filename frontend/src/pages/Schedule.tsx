@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LoaderCircle, Search, X } from 'lucide-react'
+import { LoaderCircle, Search, UserPen, X } from 'lucide-react'
 import { ApiError, deleteJSON, getJSON, postJSON } from '../api.ts'
 import DayView from '../components/schedule/DayView.tsx'
 import SearchResults from '../components/schedule/SearchResults.tsx'
@@ -12,7 +12,9 @@ import type {
   Meta,
   SearchResponse,
 } from '../components/schedule/types.ts'
+import { useProfile } from '../profile.ts'
 import '../styles/schedule.css'
+import '../styles/profile.css'
 
 // Sunday holds registration and one pre-event; the guide's days start Monday.
 const FIRST_DAY = '2026-11-09'
@@ -30,6 +32,8 @@ async function loadAgendaIds(userId: string, signal?: AbortSignal): Promise<Set<
 }
 
 export default function Schedule() {
+  // For you follows the saved profile; a save bumps `version` and the day reloads.
+  const { version, openEditor } = useProfile()
   const [meta, setMeta] = useState<Meta | null>(null)
   const [days, setDays] = useState<string[]>([])
   const [day, setDay] = useState<string | null>(null)
@@ -71,7 +75,7 @@ export default function Schedule() {
       .then((data) => setDayAnswer({ key: day, data }))
       .catch(() => !ctrl.signal.aborted && setDayAnswer({ key: day, failed: true }))
     return () => ctrl.abort()
-  }, [day, meta])
+  }, [day, meta, version])
 
   useEffect(() => {
     if (!meta) return
@@ -221,6 +225,11 @@ export default function Schedule() {
               <p className="sch-count">
                 {forYouCount} for you of {sessions.length}
                 {view.data.semantic && <span className="sch-muted"> &middot; semantic</span>}
+                <span className="sch-muted"> &middot; </span>
+                <button type="button" className="pf-edit-link" onClick={openEditor}>
+                  <UserPen size={14} aria-hidden="true" />
+                  Edit interests
+                </button>
               </p>
             )}
           </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CalendarCheck, Coffee, Radio, Timer } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
+import { useProfileVersion } from '../profile.ts'
 import SessionCard from '../components/SessionCard.tsx'
 import { dayLabel, hhmm, roomLabel } from '../components/schedule/time.ts'
 import type { Session } from '../types.ts'
@@ -28,12 +29,13 @@ function inMinutes(n: number): string {
 export default function Now() {
   const [data, setData] = useState<NowResponse | null>(null)
   const [failed, setFailed] = useState(false)
+  const version = useProfileVersion() // refetch after a profile save
 
   useEffect(() => {
     getJSON<NowResponse>('now', { user_id: DEMO_USER })
       .then(setData)
       .catch(() => setFailed(true))
-  }, [])
+  }, [version])
 
   return (
     <section className="page now" aria-labelledby="page-title">

@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { LoaderCircle, Search, SearchX, X } from 'lucide-react'
+import { LoaderCircle, Search, SearchX, UserPen, X } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
 import type { ConnectResponse, Meeting } from '../components/connect/types.ts'
 import MatchFilters from '../components/people/MatchFilters.tsx'
 import PersonCard from '../components/people/PersonCard.tsx'
 import { WHY_FILTER } from '../components/people/fields.ts'
 import type { FilterKey, Filters, Kind, MatchResponse, Why } from '../components/people/types.ts'
+import { useProfile } from '../profile.ts'
 import '../styles/people.css'
 import '../styles/connect.css'
+import '../styles/profile.css'
 
 const KINDS: { value: Kind; label: string }[] = [
   { value: 'attendee', label: 'Attendees' },
@@ -15,6 +17,8 @@ const KINDS: { value: Kind; label: string }[] = [
 ]
 
 export default function People() {
+  // The ranking follows the saved profile: a save bumps `version`, which is part of the request key.
+  const { version, openEditor } = useProfile()
   const [kind, setKind] = useState<Kind>('attendee')
   // My brief links here with ?q=<name> to open one person.
   const [text, setText] = useState(() => new URLSearchParams(window.location.search).get('q') ?? '')
@@ -31,7 +35,7 @@ export default function People() {
   const [requested, setRequested] = useState<Map<string, Meeting>>(new Map())
   const [meetings, setMeetings] = useState<Map<string, Meeting>>(new Map())
   const params = { user_id: DEMO_USER, kind, q, size: 30, ...filters }
-  const key = JSON.stringify(params)
+  const key = JSON.stringify([params, version])
   const { data, failed } = res
   const loading = res.key !== key
 
@@ -42,7 +46,7 @@ export default function People() {
 
   useEffect(() => {
     const ctrl = new AbortController()
-    getJSON<MatchResponse>('people/match', JSON.parse(key), { signal: ctrl.signal })
+    getJSON<MatchResponse>('people/match', JSON.parse(key)[0], { signal: ctrl.signal })
       .then((next) => setRes({ key, data: next, failed: false }))
       .catch((err: unknown) => {
         if (ctrl.signal.aborted) return
@@ -95,7 +99,14 @@ export default function People() {
   return (
     <section className="page people-page" aria-labelledby="page-title">
       <h1 id="page-title">People</h1>
-      <p className="page-lead">People worth meeting, ranked by what you share. Click a reason to see everyone who shares it.</p>
+      <p className="page-lead">
+        People worth meeting, ranked by what you share with your profile. Click a reason to see everyone who shares
+        it.{' '}
+        <button type="button" className="pf-edit-link" onClick={openEditor}>
+          <UserPen size={14} aria-hidden="true" />
+          Edit profile
+        </button>
+      </p>
 
       <div className="people-controls">
         <label className="people-search">

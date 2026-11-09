@@ -1,10 +1,12 @@
 import { Link } from 'react-router'
-import { DEMO_PROFILE } from '../profile.ts'
+import { FALLBACK_NAME, firstName, initials, useProfile } from '../profile.ts'
 import FoxMark from './FoxMark.tsx'
 
 type Props = { profileOpen: boolean; onOpenProfile: () => void }
 
 export default function TopBar({ profileOpen, onOpenProfile }: Props) {
+  const { profile } = useProfile()
+  const name = profile?.name ?? FALLBACK_NAME
   return (
     <header className="topbar">
       <Link to="/" className="brand" aria-label="Confox home">
@@ -18,10 +20,10 @@ export default function TopBar({ profileOpen, onOpenProfile }: Props) {
         onClick={onOpenProfile}
         aria-haspopup="dialog"
         aria-expanded={profileOpen}
-        aria-label={`Open profile for ${DEMO_PROFILE.name}`}
+        aria-label={`Edit profile for ${name}`}
       >
-        <span className="avatar" aria-hidden="true">{DEMO_PROFILE.initials}</span>
-        <span className="user-name">{DEMO_PROFILE.name}</span>
+        <span className="avatar" aria-hidden="true">{initials(name)}</span>
+        <span className="user-name">{firstName(name)}</span>
       </button>
     </header>
   )

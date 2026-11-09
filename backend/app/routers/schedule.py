@@ -71,8 +71,10 @@ def for_you(
     interests: list[str],
     on_agenda: bool = False,
     knn_score: float | None = None,
+    tracks: list[str] | tuple[str, ...] = (),
 ) -> tuple[bool, list[str], float]:
-    """Return (for_you, why, fit) for one session. `knn_score` is set only for the day's top kNN neighbours."""
+    """Return (for_you, why, fit) for one session. `knn_score` is set only for the day's top kNN neighbours;
+    `tracks` are the schedule tracks the user picked in their profile."""
     reasons: list[str] = []
     fit = 0.0
     if on_agenda:
@@ -90,6 +92,9 @@ def for_you(
         score = PLACE_FIT[matches[0][1]] + 0.05 * (len(matches) - 1)
         score += 0.02 * min(3, _title_words(session.get("title") or "", interests))
         fit = max(fit, min(score, 0.95))
+    elif session.get("track") and session.get("track") in tracks:
+        reasons.append(f"in your track {session['track']}")
+        fit = max(fit, PLACE_FIT["track"])
     if knn_score is not None:
         reasons.append("close to your interests")
         fit = max(fit, min(max(knn_score, 0.0), 0.9))
@@ -154,16 +159,20 @@ def annotate(
     agenda: list[dict],
     knn_scores: dict[str, float] | None = None,
 ) -> list[dict]:
-    """Add for_you, why, fit, on_agenda and clashes to each session (new dicts; the input is not changed)."""
+    """Add for_you, why, fit, on_agenda and clashes to each session (new dicts; the input is not changed).
+
+    `profile` is the user's profile as stored now: interests and keywords or projects are matched as phrases, and
+    chosen tracks match the session track."""
     knn_scores = knn_scores or {}
     interests = list(profile.get("interests") or []) + list(profile.get("projects") or [])
     interests = list(dict.fromkeys(interests))
+    tracks = list(profile.get("tracks") or [])
     on_agenda_ids = {i.get("session_id") for i in agenda if i.get("kind") == "session" and i.get("session_id")}
     blockers = blocking_items(agenda, {s["id"]: s.get("kind", "") for s in sessions})
     out = []
     for s in sessions:
         is_on = s["id"] in on_agenda_ids
-        mine, why, fit = for_you(s, interests, is_on, knn_scores.get(s["id"]))
+        mine, why, fit = for_you(s, interests, is_on, knn_scores.get(s["id"]), tracks)
         out.append(s | {"for_you": mine, "why": why, "fit": fit, "on_agenda": is_on, "clashes": clashes(s, blockers)})
     return pick_per_slot(out)
 
@@ -191,8 +200,9 @@ def _day_sessions(day: str) -> list[dict]:
 
 
 def _profile(user_id: str) -> tuple[dict, list[float] | None]:
-    """The profile and its vector, if the vector exists yet. Elasticsearch 9 leaves dense vectors out of _source
-    unless asked."""
+    """The profile as stored right now and its vector, if the vector exists yet. Read on every request, never
+    cached, so a profile edit changes For you at once. Elasticsearch 9 leaves dense vectors out of _source unless
+    asked."""
     try:
         doc = es.get(index=settings.idx_people, id=user_id, source_exclude_vectors=False)
     except NotFoundError:
