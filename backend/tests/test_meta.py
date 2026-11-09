@@ -16,3 +16,9 @@ def test_meta_uses_the_demo_clock(monkeypatch):
 def test_real_clock_when_demo_now_is_empty(monkeypatch):
     monkeypatch.setattr(clock.settings, "demo_now", "")
     assert clock.now().tzinfo is None
+
+
+def test_tests_never_export_telemetry():
+    from app.telemetry import exporting
+
+    assert not exporting()
