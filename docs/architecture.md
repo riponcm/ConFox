@@ -51,3 +51,4 @@ Export switches on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. A demo-only e
 | Load `.env` into the process environment at startup | The OTLP exporters read `OTEL_*` from the environment, not from app settings |
 | No separate Elasticsearch instrumentor | The Elasticsearch 9 Python client has native OpenTelemetry support; the contrib instrumentor disables itself |
 | One `.env` at the repo root for both halves | Only `VITE_*` values reach the browser bundle; everything else stays server side |
+| ASGI `send`/`receive` spans excluded | One server span per request keeps traces readable; Elasticsearch calls still appear as child spans |

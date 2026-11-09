@@ -58,4 +58,5 @@ def setup_telemetry() -> None:
 
 
 def instrument_app(app) -> None:
-    FastAPIInstrumentor.instrument_app(app)
+    # One server span per request; the per-message ASGI "send"/"receive" spans are noise for this app.
+    FastAPIInstrumentor.instrument_app(app, exclude_spans=["send", "receive"])
