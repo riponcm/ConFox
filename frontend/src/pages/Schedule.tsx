@@ -72,7 +72,8 @@ export default function Schedule() {
   const today = meta?.now.slice(0, 10) ?? ''
   // The URL's day when it is one of the conference days; else today if the conference is on, else the first day.
   const day = state.day && days.includes(state.day) ? state.day : days.includes(today) ? today : (days[0] ?? null)
-  const from = state.from ?? (day === today ? 'now' : 'day')
+  // From now applies to today only; on other days the whole day is shown and the toggle is hidden.
+  const from = day === today ? (state.from ?? 'now') : 'day'
   const searchKey = `${debounced}|${day ?? ''}`
 
   useEffect(() => {

@@ -1,40 +1,47 @@
 """Dashboard: the conference pulse for one day, built entirely from Elasticsearch aggregations.
 
-Two `size: 0` searches per request: one on sessions (stats, timeline, tracks, kinds, next up) and one on people
-(sample attendees, their countries, speaker companies). "Starting soon" is a `top_hits` aggregation, so no
-document search is needed.
+One `msearch` per request with four `size: 0` bodies: sessions (week, day timeline, tracks), people (who is here and
+what attendees bring), agenda (what fills up next, and the signed-in user's own day) and activity (what people do in
+Confox). "Filling up next" and "my day" read their few documents through `top_hits`, so no document search is needed.
+Next coffee and what is on now stay on `GET /api/now`.
 
-`GET /api/dashboard?day=YYYY-MM-DD` (default: the day of `clock.now()`) returns:
+`GET /api/dashboard?day=YYYY-MM-DD&user_id=...` (defaults: the day of `clock.now()`, `settings.demo_user`) returns:
 
     {
       "day": "2026-11-09",
       "now": "2026-11-09T08:40:00",          # clock.now(); the UI draws the now line from it
       "is_today": true,                      # whether `now` falls on `day`
-      "days": [{"day": "2026-11-09", "sessions": 78}, ...],          # every day with sessions, in order
-      "stats": {
-        "sessions_total": 600, "sessions_day": 78,
-        "speakers_total": 712, "speakers_day": 120,                  # distinct speaker_ids
-        "tracks_total": 40, "tracks_day": 5,                         # distinct tracks
-        "sample_attendees": 80, "countries": 7                       # people with sample: true
-      },
+      "days": [{"day": "2026-11-08", "sessions": 41}, ...],           # every day with sessions, in order (the week)
+      "sessions": {"total": 600, "day": 78},
       "timeline": {
         "interval_minutes": 30,
-        "groups": ["talks", "keynotes", "colocated", "breaks", "other"],
-        "buckets": [{"start": "2026-11-09T07:00:00", "total": 2,
-                     "counts": {"talks": 0, "keynotes": 0, "colocated": 0, "breaks": 0, "other": 2}}, ...]
+        "buckets": [{"start": "2026-11-09T07:00:00", "total": 2, "mine": 0}, ...]   # mine: user's confirmed items
       },
-      "next_up": [{"id": "...", "title": "...", "starts_at": "...", "room": "...", "kind": "colocated"}],  # up to 6
-      "next_up_total": 9,                    # sessions starting in the next 90 minutes, excluding registration
-      "tracks": [{"name": "Project Lightning Talks", "sessions": 51}, ...],    # top 10 on the day
-      "kinds": [{"kind": "lightning", "sessions": 48}, ...],                   # on the day
+      "tracks": [{"name": "Project Lightning Talks", "sessions": 51}, ...],          # top 6 on the day
+      "filling": [{"id": "1289760", "title": "...", "starts_at": "...", "room": "...", "going": 5}],
+                                             # top 5 sessions starting after now on the day, by agenda items
+      "my_day": {                            # the signed-in user's agenda on the day (sample data)
+        "hours": 8.5, "goal_hours": 8,       # hours covered by confirmed items (overlaps counted once)
+        "sessions": 1, "meetings": 1,        # confirmed items
+        "requests": 1                        # pending meeting requests someone sent the user
+      },
       "people": {
-        "countries": [{"name": "United States", "attendees": 35}, ...],       # sample attendees
-        "companies": [{"name": "Google", "speakers": 51}, ...]                # all speakers, top 10
+        "total": 792, "speakers": 712, "attendees": 80, "sample": 80,
+        "countries": [{"name": "United States", "count": 35}, ...],     # attendees, top 6
+        "schools": [{"name": "University of Utah", "count": 8, "pinned": true}, ...],  # attendees, host first
+        "companies": [{"name": "Redwood Labs", "count": 15}, ...],      # attendees, top 6
+        "interests": [{"name": "Multi-cluster", "count": 33}, ...]      # attendees, top 6
+      },
+      "activity": {                          # events in Confox on the day (includes sample events)
+        "total": 160, "sample": 160,
+        "kinds": [{"kind": "search", "count": 62}, ...],
+        "buckets": [{"start": "2026-11-09T07:00:00", "count": 0}, ...],   # 30 minutes; on today, up to now
+        "searches": [{"name": "platform engineering", "count": 10}, ...]   # top searches all week
       }
     }
 
-Timeline buckets cover 07:00 to 19:00 local time (24 half hours, empty ones included). Times are stored as local
-conference time without an offset, so Elasticsearch's UTC buckets line up with the local clock.
+Buckets cover 07:00 to 19:00 local time (24 half hours, empty ones included). Times are stored as local conference
+time without an offset, so Elasticsearch's UTC buckets line up with the local clock.
 """
 
 import logging
@@ -55,178 +62,323 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 INTERVAL_MINUTES = 30
 DAY_START = "07:00:00"
 DAY_END = "19:00:00"
-NEXT_UP_MINUTES = 90
-NEXT_UP_SIZE = 6
-TOP_TRACKS = 10
-TOP_COMPANIES = 10
-TOP_COUNTRIES = 20
-
-# Kind groups for the timeline, in stacking order. Kinds not listed fall into "other".
-GROUPS = ["talks", "keynotes", "colocated", "breaks", "other"]
-GROUP_OF_KIND = {
-    "talk": "talks",
-    "lightning": "talks",
-    "tutorial": "talks",
-    "contribfest": "talks",
-    "keynote": "keynotes",
-    "colocated": "colocated",
-    "break": "breaks",
-}
+TOP = 6
+FILLING_SIZE = 5
+GOAL_HOURS = 8
+MY_ITEMS = 50
+# Salt Lake City hosts: the local university leads the alumni list (review rule), the rest follow by count.
+HOST_SCHOOL = "University of Utah"
 
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
+
+class SearchFailed(Exception):
+    """One body inside the msearch failed; `error` is Elasticsearch's error object for it."""
+
+    def __init__(self, error: dict):
+        super().__init__(f"dashboard search failed: {error}")
+        self.error = error
 
 
 def _ts(dt: datetime) -> str:
     return dt.strftime(TS_FORMAT)
 
 
-def sessions_body(day: str, now: datetime) -> dict:
-    """One size-0 search over all sessions: overall stats, then everything about `day` under a filter."""
-    soon_from, soon_to = _ts(now), _ts(now + timedelta(minutes=NEXT_UP_MINUTES))
+def _day_bounds(day: str) -> tuple[str, str]:
+    start = datetime.fromisoformat(f"{day}T00:00:00")
+    return _ts(start), _ts(start + timedelta(days=1))
+
+
+def _histogram(field: str, day: str) -> dict:
+    return {
+        "date_histogram": {
+            "field": field,
+            "fixed_interval": f"{INTERVAL_MINUTES}m",
+            "min_doc_count": 0,
+            "extended_bounds": {
+                "min": f"{day}T{DAY_START}",
+                "max": _ts(datetime.fromisoformat(f"{day}T{DAY_END}") - timedelta(minutes=1)),
+            },
+            "hard_bounds": {"min": f"{day}T{DAY_START}", "max": f"{day}T{DAY_END}"},
+        }
+    }
+
+
+def sessions_body(day: str) -> dict:
+    """Sessions: the week by day, then the day's timeline and tracks under a filter."""
     return {
         "size": 0,
         "track_total_hits": True,
         "aggs": {
-            "speakers": {"cardinality": {"field": "speaker_ids"}},
-            "tracks": {"cardinality": {"field": "track"}},
             "days": {"terms": {"field": "day", "size": 31, "order": {"_key": "asc"}}},
             "day": {
                 "filter": {"term": {"day": day}},
                 "aggs": {
-                    "speakers": {"cardinality": {"field": "speaker_ids"}},
-                    "tracks_count": {"cardinality": {"field": "track"}},
-                    "tracks": {"terms": {"field": "track", "size": TOP_TRACKS}},
-                    "kinds": {"terms": {"field": "kind", "size": 20}},
-                    "timeline": {
-                        "date_histogram": {
-                            "field": "starts_at",
-                            "fixed_interval": f"{INTERVAL_MINUTES}m",
-                            "min_doc_count": 0,
-                            "extended_bounds": {
-                                "min": f"{day}T{DAY_START}",
-                                "max": _ts(datetime.fromisoformat(f"{day}T{DAY_END}") - timedelta(minutes=1)),
-                            },
-                            "hard_bounds": {"min": f"{day}T{DAY_START}", "max": f"{day}T{DAY_END}"},
-                        },
-                        "aggs": {"kinds": {"terms": {"field": "kind", "size": 20}}},
-                    },
-                    "next_up": {
-                        "filter": {
-                            "bool": {
-                                "filter": [{"range": {"starts_at": {"gte": soon_from, "lte": soon_to}}}],
-                                "must_not": [{"term": {"kind": "registration"}}],
-                            }
-                        },
-                        "aggs": {
-                            "hits": {
-                                "top_hits": {
-                                    "size": NEXT_UP_SIZE,
-                                    "sort": [{"starts_at": "asc"}, {"title.raw": "asc"}],
-                                    "_source": ["title", "starts_at", "room", "kind"],
-                                }
-                            }
-                        },
-                    },
+                    "tracks": {"terms": {"field": "track", "size": TOP}},
+                    "timeline": _histogram("starts_at", day),
                 },
             },
         },
     }
+
+
+def _terms(field: str, size: int = TOP) -> dict:
+    return {"terms": {"field": field, "size": size, "exclude": [""]}}
 
 
 def people_body() -> dict:
-    """One size-0 search over people: sample attendees and their countries, companies of speakers."""
+    """People: everyone by kind, the sample count, and what attendees bring (countries, schools, employers)."""
+    return {
+        "size": 0,
+        "track_total_hits": True,
+        "aggs": {
+            "kinds": {"terms": {"field": "kind", "size": 10}},
+            "sample": {"filter": {"term": {"sample": True}}},
+            "attendees": {
+                "filter": {"term": {"kind": "attendee"}},
+                "aggs": {
+                    "countries": _terms("country"),
+                    "schools": _terms("schools", TOP + 1),
+                    "host_school": {"filter": {"term": {"schools": HOST_SCHOOL}}},
+                    "companies": _terms("company"),
+                    "interests": _terms("interests"),
+                },
+            },
+        },
+    }
+
+
+def agenda_body(day: str, now: datetime, user_id: str) -> dict:
+    """Agenda: the most-added sessions still to start on the day, and the user's own items on the day."""
+    day_from, day_to = _day_bounds(day)
+    after = max(_ts(now), _ts(datetime.fromisoformat(day_from) - timedelta(seconds=1)))
     return {
         "size": 0,
         "aggs": {
-            "sample": {
-                "filter": {"term": {"sample": True}},
+            "filling": {
+                "filter": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"kind": "session"}},
+                            {"term": {"status": "confirmed"}},
+                            {"range": {"starts_at": {"gt": after, "lt": day_to}}},
+                        ]
+                    }
+                },
                 "aggs": {
-                    "countries": {"terms": {"field": "country", "size": TOP_COUNTRIES}},
-                    "countries_count": {"cardinality": {"field": "country"}},
+                    "sessions": {
+                        "terms": {
+                            "field": "session_id",
+                            "size": FILLING_SIZE,
+                            "order": [{"_count": "desc"}, {"start": "asc"}],
+                        },
+                        "aggs": {
+                            "start": {"min": {"field": "starts_at"}},
+                            "doc": {"top_hits": {"size": 1, "_source": ["title", "starts_at", "room"]}},
+                        },
+                    }
                 },
             },
-            "speakers": {
-                "filter": {"term": {"kind": "speaker"}},
-                "aggs": {"companies": {"terms": {"field": "company", "size": TOP_COMPANIES, "exclude": [""]}}},
+            "mine": {
+                "filter": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"user_id": user_id}},
+                            {"range": {"starts_at": {"gte": day_from, "lt": day_to}}},
+                        ]
+                    }
+                },
+                "aggs": {
+                    "items": {
+                        "top_hits": {
+                            "size": MY_ITEMS,
+                            "sort": [{"starts_at": "asc"}],
+                            "_source": ["kind", "status", "direction", "starts_at", "ends_at"],
+                        }
+                    }
+                },
             },
         },
     }
 
 
-def group_counts(kind_buckets: list[dict]) -> dict[str, int]:
-    """Fold per-kind terms buckets into the timeline's kind groups."""
-    counts = dict.fromkeys(GROUPS, 0)
-    for b in kind_buckets:
-        counts[GROUP_OF_KIND.get(b["key"], "other")] += b["doc_count"]
+def activity_body(day: str) -> dict:
+    """Activity: the day's events by kind and per half hour, and the top search phrases of the week."""
+    day_from, day_to = _day_bounds(day)
+    return {
+        "size": 0,
+        "aggs": {
+            "day": {
+                "filter": {"range": {"at": {"gte": day_from, "lt": day_to}}},
+                "aggs": {
+                    "kinds": {"terms": {"field": "kind", "size": 20}},
+                    "sample": {"filter": {"term": {"sample": True}}},
+                    "timeline": _histogram("at", day),
+                },
+            },
+            "searches": {"filter": {"term": {"kind": "search"}}, "aggs": {"terms": _terms("detail")}},
+        },
+    }
+
+
+def bodies(day: str, now: datetime, user_id: str) -> list[tuple[str, dict]]:
+    """The four searches of one dashboard request, with the index each one runs on."""
+    return [
+        (settings.idx_sessions, sessions_body(day)),
+        (settings.idx_people, people_body()),
+        (settings.idx_agenda, agenda_body(day, now, user_id)),
+        (settings.idx_activity, activity_body(day)),
+    ]
+
+
+def _names(agg: dict) -> list[dict]:
+    return [{"name": b["key"], "count": b["doc_count"]} for b in agg["buckets"]]
+
+
+def pin_school(buckets: list[dict], host_count: int, size: int = TOP) -> list[dict]:
+    """The host university first (when any attendee studied there), then the rest by count."""
+    rest = [{"name": b["key"], "count": b["doc_count"]} for b in buckets if b["key"] != HOST_SCHOOL]
+    if not host_count:
+        return rest[:size]
+    return [{"name": HOST_SCHOOL, "count": host_count, "pinned": True}, *rest[: size - 1]]
+
+
+def covered_hours(items: list[dict]) -> float:
+    """Hours covered by the given items, overlaps counted once, rounded to a quarter hour."""
+    spans = sorted(
+        (datetime.fromisoformat(i["starts_at"]), datetime.fromisoformat(i["ends_at"]))
+        for i in items
+        if i.get("starts_at") and i.get("ends_at") and i["ends_at"] > i["starts_at"]
+    )
+    total = timedelta()
+    cur_start = cur_end = None
+    for start, end in spans:
+        if cur_end is None or start > cur_end:
+            if cur_end is not None:
+                total += cur_end - cur_start
+            cur_start, cur_end = start, end
+        else:
+            cur_end = max(cur_end, end)
+    if cur_end is not None:
+        total += cur_end - cur_start
+    return round(total.total_seconds() / 3600 * 4) / 4
+
+
+def my_day(items: list[dict]) -> dict:
+    confirmed = [i for i in items if i.get("status") == "confirmed"]
+    requests = [
+        i
+        for i in items
+        if i.get("kind") == "meeting"
+        and i.get("status") == "pending"
+        and (i.get("direction") or "incoming") == "incoming"
+    ]
+    return {
+        "hours": covered_hours(confirmed),
+        "goal_hours": GOAL_HOURS,
+        "sessions": sum(1 for i in confirmed if i.get("kind") == "session"),
+        "meetings": sum(1 for i in confirmed if i.get("kind") == "meeting"),
+        "requests": len(requests),
+    }
+
+
+def mine_per_bucket(starts: list[str], items: list[dict]) -> list[int]:
+    """How many confirmed items start inside each half hour that begins at one of `starts`."""
+    edges = [datetime.fromisoformat(s) for s in starts]
+    width = timedelta(minutes=INTERVAL_MINUTES)
+    counts = [0] * len(edges)
+    for item in items:
+        if item.get("status") != "confirmed" or not item.get("starts_at"):
+            continue
+        at = datetime.fromisoformat(item["starts_at"])
+        for i, edge in enumerate(edges):
+            if edge <= at < edge + width:
+                counts[i] += 1
+                break
     return counts
 
 
-def shape_timeline(histogram: dict) -> dict:
-    buckets = [
-        {
-            "start": b["key_as_string"],
-            "total": b["doc_count"],
-            "counts": group_counts(b["kinds"]["buckets"]),
-        }
-        for b in histogram["buckets"]
-    ]
-    return {"interval_minutes": INTERVAL_MINUTES, "groups": GROUPS, "buckets": buckets}
-
-
-def _terms(agg: dict, name: str, count: str) -> list[dict]:
-    return [{name: b["key"], count: b["doc_count"]} for b in agg["buckets"]]
-
-
-def shape(day: str, now: datetime, sessions: dict, people: dict) -> dict:
-    """Turn the two aggregation responses into the dashboard payload."""
-    s, p = sessions["aggregations"], people["aggregations"]
-    d = s["day"]
-    next_up = [
-        {
-            "id": h["_id"],
-            "title": h["_source"].get("title", ""),
-            "starts_at": h["_source"].get("starts_at"),
-            "room": (h["_source"].get("room") or "").strip(),
-            "kind": h["_source"].get("kind"),
-        }
-        for h in d["next_up"]["hits"]["hits"]["hits"]
-    ]
+def shape_activity(day_agg: dict, searches: dict, now: datetime, is_today: bool) -> dict:
+    buckets = [{"start": b["key_as_string"], "count": b["doc_count"]} for b in day_agg["timeline"]["buckets"]]
+    if is_today:  # the future has no activity yet: stop at the half hour that holds now, not at a row of zeros
+        buckets = [b for b in buckets if datetime.fromisoformat(b["start"]) <= now]
     return {
-        "day": day,
-        "now": _ts(now),
-        "is_today": now.date().isoformat() == day,
-        "days": _terms(s["days"], "day", "sessions"),
-        "stats": {
-            "sessions_total": sessions["hits"]["total"]["value"],
-            "sessions_day": d["doc_count"],
-            "speakers_total": s["speakers"]["value"],
-            "speakers_day": d["speakers"]["value"],
-            "tracks_total": s["tracks"]["value"],
-            "tracks_day": d["tracks_count"]["value"],
-            "sample_attendees": p["sample"]["doc_count"],
-            "countries": p["sample"]["countries_count"]["value"],
-        },
-        "timeline": shape_timeline(d["timeline"]),
-        "next_up": next_up,
-        "next_up_total": d["next_up"]["doc_count"],
-        "tracks": _terms(d["tracks"], "name", "sessions"),
-        "kinds": _terms(d["kinds"], "kind", "sessions"),
-        "people": {
-            "countries": _terms(p["sample"]["countries"], "name", "attendees"),
-            "companies": _terms(p["speakers"]["companies"], "name", "speakers"),
-        },
+        "total": day_agg["doc_count"],
+        "sample": day_agg["sample"]["doc_count"],
+        "kinds": [{"kind": b["key"], "count": b["doc_count"]} for b in day_agg["kinds"]["buckets"]],
+        "buckets": buckets,
+        "searches": _names(searches["terms"]),
     }
 
 
+def shape(day: str, now: datetime, sessions: dict, people: dict, agenda: dict, activity: dict) -> dict:
+    """Turn the four aggregation responses into the dashboard payload."""
+    s, p, a, act = sessions["aggregations"], people["aggregations"], agenda["aggregations"], activity["aggregations"]
+    is_today = now.date().isoformat() == day
+    mine = [h["_source"] for h in a["mine"]["items"]["hits"]["hits"]]
+    histogram = s["day"]["timeline"]["buckets"]
+    per_bucket = mine_per_bucket([b["key_as_string"] for b in histogram], mine)
+    kinds = {b["key"]: b["doc_count"] for b in p["kinds"]["buckets"]}
+    att = p["attendees"]
+    filling = []
+    for b in a["filling"]["sessions"]["buckets"]:
+        hit = b["doc"]["hits"]["hits"][0]["_source"]
+        filling.append(
+            {
+                "id": b["key"],
+                "title": hit.get("title", ""),
+                "starts_at": hit.get("starts_at"),
+                "room": (hit.get("room") or "").strip(),
+                "going": b["doc_count"],
+            }
+        )
+    return {
+        "day": day,
+        "now": _ts(now),
+        "is_today": is_today,
+        "days": [{"day": b["key"], "sessions": b["doc_count"]} for b in s["days"]["buckets"]],
+        "sessions": {"total": sessions["hits"]["total"]["value"], "day": s["day"]["doc_count"]},
+        "timeline": {
+            "interval_minutes": INTERVAL_MINUTES,
+            "buckets": [
+                {"start": b["key_as_string"], "total": b["doc_count"], "mine": n}
+                for b, n in zip(histogram, per_bucket, strict=True)
+            ],
+        },
+        "tracks": [{"name": b["key"], "sessions": b["doc_count"]} for b in s["day"]["tracks"]["buckets"]],
+        "filling": filling,
+        "my_day": my_day(mine),
+        "people": {
+            "total": people["hits"]["total"]["value"],
+            "speakers": kinds.get("speaker", 0),
+            "attendees": kinds.get("attendee", 0),
+            "sample": p["sample"]["doc_count"],
+            "countries": _names(att["countries"]),
+            "schools": pin_school(att["schools"]["buckets"], att["host_school"]["doc_count"]),
+            "companies": _names(att["companies"]),
+            "interests": _names(att["interests"]),
+        },
+        "activity": shape_activity(act["day"], act["searches"], now, is_today),
+    }
+
+
+def _msearch(requests: list[tuple[str, dict]]) -> list[dict]:
+    searches = [part for index, body in requests for part in ({"index": index}, body)]
+    responses = es.msearch(searches=searches)["responses"]
+    for r in responses:
+        if "error" in r:
+            raise SearchFailed(r["error"])
+    return responses
+
+
 @router.get("")
-def dashboard(day: date | None = None) -> dict:
+def dashboard(day: date | None = None, user_id: str | None = None) -> dict:
     now = clock_now()
     day_str = (day or now.date()).isoformat()
     try:
-        sessions = es.search(index=settings.idx_sessions, **sessions_body(day_str, now))
-        people = es.search(index=settings.idx_people, **people_body())
-    except (ApiError, TransportError) as exc:
+        sessions, people, agenda, activity = _msearch(bodies(day_str, now, user_id or settings.demo_user))
+    except (ApiError, TransportError, SearchFailed) as exc:
         log.error("dashboard aggregations failed for %s: %s", day_str, exc, exc_info=exc)
         trace.get_current_span().record_exception(exc)
         raise HTTPException(status_code=503, detail="Elasticsearch is not available") from exc
-    return shape(day_str, now, sessions.body, people.body)
+    return shape(day_str, now, sessions, people, agenda, activity)

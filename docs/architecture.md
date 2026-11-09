@@ -93,16 +93,20 @@ flowchart LR
 
 Export switches on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. A demo-only endpoint (`POST /api/debug/break`, off by default) sends Elasticsearch a query it rejects, so Dash0 has a real error to find.
 
-## Dashboard (pull request 5)
+## Dashboard (pull request 5, reworked)
 
-"The conference pulse" for one day, built only from Elasticsearch aggregations. `GET /api/dashboard?day=YYYY-MM-DD` (default: the day of `clock.now()`) makes two `size: 0` searches; the response shape is documented in `backend/app/routers/dashboard.py`.
+"The conference pulse" for one day, built only from Elasticsearch aggregations. `GET /api/dashboard?day=YYYY-MM-DD` (default: the day of `clock.now()`) makes one `msearch` with four `size: 0` bodies; the response shape is documented in `backend/app/routers/dashboard.py`. Next coffee and what is on now still come from `GET /api/now`, so the page makes two API calls.
 
-| Request | Aggregations | Feeds |
+| Body | Aggregations | Feeds |
 |---|---|---|
-| `confox-sessions` | `cardinality` of `speaker_ids` and `track` (week); `terms` on `day` (day selector); a `filter` on the day holding `cardinality` (speakers, tracks), `terms` on `track` (top 10) and `kind`, a `date_histogram` on `starts_at` (30 minutes, 07:00 to 19:00, empty buckets kept) with `terms` on `kind` per bucket, and a `filter` on the next 90 minutes (registration left out) with `top_hits` | Stat tiles, timeline, starting soon, top tracks |
-| `confox-people` | `filter` on `sample: true` with `terms` and `cardinality` on `country`; `filter` on `kind: speaker` with `terms` on `company` | Attendee count and countries, speaker companies |
+| `confox-sessions` | `terms` on `day` (week); a `filter` on the day with `terms` on `track` and a `date_histogram` on `starts_at` (30 minutes, 07:00 to 19:00, empty buckets kept) | Day selector, Happening count, timeline, Tracks, Week |
+| `confox-people` | `terms` on `kind`; `filter` on `sample: true`; a `filter` on attendees with `terms` on `country`, `schools`, `company`, `interests` and a `filter` counting University of Utah alumni | People here, Where people are from, Universities, Companies, Interests |
+| `confox-agenda` | a `filter` on confirmed session items starting after now on the day with `terms` on `session_id` (ordered by count, then a `min` of `starts_at`) and `top_hits` for the title; a `filter` on the user's items on the day with `top_hits` | Filling up next, My day, agenda dots on the timeline |
+| `confox-activity` | a `filter` on the day with `terms` on `kind`, a `filter` on `sample` and a `date_histogram` on `at`; a `filter` on `kind: search` with `terms` on `detail` (the whole week) | Confox activity, What people want |
 
-Kinds fold into five groups for the timeline (talks, keynotes, co-located, breaks and food, other); the folding lives in Python so it is unit tested against hand-written aggregation responses. The page draws the stacked bars in plain SVG with a now line, hover and keyboard readouts, and a visually hidden table of every value. Chart colours are the `--chart-*` tokens in `index.css`, five categorical slots validated for colour-vision deficiency against the panel colour. Attendee numbers are labelled as sample data.
+Python shapes the buckets: it merges the user's confirmed items into covered hours (overlaps counted once, against an 8-hour day), counts pending incoming meet requests, marks which half hours hold one of the user's items, stops today's activity buckets at the current half hour, and puts University of Utah first among universities (the host city; the rest follow by count). Each step is a pure function tested against hand-written responses; if one body of the `msearch` fails, the endpoint answers 503.
+
+The page shows four tiles (next coffee, happening, people here, my day with a progress ring), a single-colour bar chart of sessions starting per half hour (past half hours lighter, a dot where the user has an agenda item, a dashed now line, hover and keyboard readouts and a visually hidden table), then nine ranked-bar cards in a 3, 2 or 1 column grid. On a day other than today the personal tiles and the now line are hidden. Attendee profiles, agendas and most activity are labelled as sample data.
 
 ## How features plug in
 
@@ -276,6 +280,22 @@ Speaker links come from the schedule snapshot; the people loader now indexes the
 **Drawer.** `SessionDrawerProvider` is mounted once in the Shell. `useSessionDrawer().open(id)` opens it; `SessionLink` is the title button every list uses (Schedule rows in the day view and ranked views, search results and Brief suggestions through `SessionCard`, Compare dialog titles, Now cards and tiles, Dashboard "Starting soon", the My brief timeline). The open session is the URL parameter `?session=<id>` (replace, so a reload or a shared link opens the same drawer on any page); the in-drawer history is kept in the provider, so a similar session or a speaker's other talk opens inside the drawer and Back returns. A URL naming another session starts a fresh history.
 
 It is a native modal `<dialog>` on the right, full width under 768 px (sized in percent, since `100vw` includes the page scrollbar): focus is trapped, Escape closes it (only the drawer when it is opened from the Compare dialog), focus returns to the title that opened it, and after Back or a similar session focus moves to the new title. Content: kind, title, day and time range with length, room and venue, track, level and project chips, the Schedule's `AgendaButton`, "Catch up on this talk" (to `/catch-up?talk=<id>`, the Catch up page's own parameter; `?session=` would reopen the drawer there) and Slides when present, the clash warning, "Why it matches you", Going (labelled sample data), the description (Show more past 360 characters), speakers (initials avatar, name, title and company, bio, links, Also speaking) and Similar sessions (or "Later in this track"). Adding or removing in the drawer bumps `agendaVersion` in the provider; Schedule and My brief reload on it, so rows, For you and the brief agree.
+## Now
+
+"Right now" for the signed-in attendee: where to be next, what comes after, and a two-hour timeline. `GET /api/now?user_id=emma` lives in `backend/app/routers/now.py` (response shape in its docstring); the page is `src/pages/Now.tsx` with `src/styles/now.css`. Nothing new is stored. The older fields `food` (`next_food()` from `app/now.py`), `on_now_total`, `soon`, `soon_total` and `my_next` keep their shapes because the Dashboard reads them; `on_now` now lists every session running (not just six), each with `going` and `short_title`.
+
+| Field | Rule |
+|---|---|
+| `next` | The first confirmed agenda item today that has not started (a meeting counts until it ends), so a co-located day already under way gives way to the coffee. Without one, the earliest for-you session still to start, best fit first. Built on My brief's `build_timeline` (short titles, all-day flag) |
+| `then` | The agenda item or food break after `next`; a break that starts with a confirmed meeting is that meeting ("Coffee with Alice Moreno") |
+| `slots` | Sessions starting in the next 120 minutes (`horizon_minutes`), one entry per start time; breaks get their own entry with `food: true`. `featured` is the session on the user's agenda, else the best for-you match (Schedule's `annotate`, kNN when the profile has a vector), else the most saved; null when none qualifies. `others` are the rest of the slot, most saved first |
+| `going` | Confirmed agenda sessions across all users (mostly the 80 sample attendees), from one aggregation: `terms` on `session_id` over the on-now and slot ids |
+| `friends` | Up to two names of people the user knows who saved the featured session: their meetings and requests first, then the top 15 Match results (same ranking as My brief). Same aggregation, a `filter` on those user ids with `terms` on `session_id` and `user_id` |
+| `simulated` | `DEMO_NOW` is set; the header then says "simulated clock" |
+
+Six Elasticsearch requests: the day's sessions, the user's agenda, the profile, kNN (only with a vector), the Match ranking, and the going aggregation. The choices (`pick_next`, `pick_then`, `group_slots`, `choose_featured`, `build_slots`, `known_people`, `parse_going`) are pure functions tested with hand-written dicts. The span carries `confox.now.on_now`, `confox.now.slots` and `confox.now.next_source`.
+
+The page shows the header with a "My brief" button, a `--hero` banner (Where to be next, Then; columns stack on phone), then "Next two hours": a vertical timeline with the time and "now" / "in 20 min" on the left. The first row is "N on now", expandable; each slot shows its featured card (title, time, room, track chip, why chip, "2 going · names") and a "+N more · titles · show" line that expands to compact rows; breaks are quiet rows with a coffee icon. Agenda, going counts and names are labelled as generated sample data.
 
 ## Key decisions
 

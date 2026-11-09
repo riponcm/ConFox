@@ -95,15 +95,18 @@ export default function Toolbar(p: Props) {
         </div>
       )}
 
-      <Segmented
-        label="Time"
-        options={[
-          { key: 'now', label: 'From now' },
-          { key: 'day', label: 'Whole day' },
-        ]}
-        value={p.from}
-        onChange={p.onFrom}
-      />
+      {/* "From now" only means something on today; other days always show the whole day. */}
+      {p.day === p.today && (
+        <Segmented
+          label="Time"
+          options={[
+            { key: 'now', label: 'From now' },
+            { key: 'day', label: 'Whole day' },
+          ]}
+          value={p.from}
+          onChange={p.onFrom}
+        />
+      )}
 
       <button
         type="button"
