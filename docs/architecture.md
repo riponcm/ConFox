@@ -229,6 +229,23 @@ One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (d
 
 The page shows the date and summary, "People today" (confirmed meetings, incoming requests with Accept and Decline, suggested people linking to `/people?q=`), the "Your day" timeline (dashed free rows link to `/schedule`) and "Suggested for you" as `SessionCard`s. Accept and Decline call `POST /api/connect/{id}/accept|decline` from the connect pull request and refresh; on a 404 the card says "Not available yet". The request span carries `confox.brief.timeline`, `confox.brief.requests_incoming`, `confox.brief.people` and `confox.brief.suggested`. Agenda items and people are labelled as generated sample data.
 
+## Now
+
+"Right now" for the signed-in attendee: where to be next, what comes after, and a two-hour timeline. `GET /api/now?user_id=emma` lives in `backend/app/routers/now.py` (response shape in its docstring); the page is `src/pages/Now.tsx` with `src/styles/now.css`. Nothing new is stored. The older fields `food` (`next_food()` from `app/now.py`), `on_now_total`, `soon`, `soon_total` and `my_next` keep their shapes because the Dashboard reads them; `on_now` now lists every session running (not just six), each with `going` and `short_title`.
+
+| Field | Rule |
+|---|---|
+| `next` | The first confirmed agenda item today that has not started (a meeting counts until it ends), so a co-located day already under way gives way to the coffee. Without one, the earliest for-you session still to start, best fit first. Built on My brief's `build_timeline` (short titles, all-day flag) |
+| `then` | The agenda item or food break after `next`; a break that starts with a confirmed meeting is that meeting ("Coffee with Alice Moreno") |
+| `slots` | Sessions starting in the next 120 minutes (`horizon_minutes`), one entry per start time; breaks get their own entry with `food: true`. `featured` is the session on the user's agenda, else the best for-you match (Schedule's `annotate`, kNN when the profile has a vector), else the most saved; null when none qualifies. `others` are the rest of the slot, most saved first |
+| `going` | Confirmed agenda sessions across all users (mostly the 80 sample attendees), from one aggregation: `terms` on `session_id` over the on-now and slot ids |
+| `friends` | Up to two names of people the user knows who saved the featured session: their meetings and requests first, then the top 15 Match results (same ranking as My brief). Same aggregation, a `filter` on those user ids with `terms` on `session_id` and `user_id` |
+| `simulated` | `DEMO_NOW` is set; the header then says "simulated clock" |
+
+Six Elasticsearch requests: the day's sessions, the user's agenda, the profile, kNN (only with a vector), the Match ranking, and the going aggregation. The choices (`pick_next`, `pick_then`, `group_slots`, `choose_featured`, `build_slots`, `known_people`, `parse_going`) are pure functions tested with hand-written dicts. The span carries `confox.now.on_now`, `confox.now.slots` and `confox.now.next_source`.
+
+The page shows the header with a "My brief" button, a `--hero` banner (Where to be next, Then; columns stack on phone), then "Next two hours": a vertical timeline with the time and "now" / "in 20 min" on the left. The first row is "N on now", expandable; each slot shows its featured card (title, time, room, track chip, why chip, "2 going · names") and a "+N more · titles · show" line that expands to compact rows; breaks are quiet rows with a coffee icon. Agenda, going counts and names are labelled as generated sample data.
+
 ## Key decisions
 
 | Decision | Why |
