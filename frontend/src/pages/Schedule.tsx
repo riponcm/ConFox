@@ -48,8 +48,14 @@ async function loadAgendaIds(userId: string, signal?: AbortSignal): Promise<Set<
 export default function Schedule() {
   const [params, setParams] = useSearchParams()
   const state = parseState(params)
+  // Rebuilding the query string must keep the session drawer's ?session= so an open drawer stays open.
+  const withSession = (prev: URLSearchParams, next: URLSearchParams) => {
+    const session = prev.get('session')
+    if (session) next.set('session', session)
+    return next
+  }
   const update = (change: Partial<ScheduleState>) =>
-    setParams((prev) => toParams({ ...parseState(prev), ...change }), { replace: true })
+    setParams((prev) => withSession(prev, toParams({ ...parseState(prev), ...change })), { replace: true })
   const setFilters = (filters: Filters) => update({ filters })
   const openProfile = useOpenProfile()
   // Bumped when the session drawer changes the agenda: reload the day and the agenda ids.
@@ -139,7 +145,7 @@ export default function Schedule() {
     const q = query.trim()
     if (q === debounced) return
     const t = setTimeout(
-      () => setParams((prev) => toParams({ ...parseState(prev), q }), { replace: true }),
+      () => setParams((prev) => withSession(prev, toParams({ ...parseState(prev), q })), { replace: true }),
       DEBOUNCE_MS,
     )
     return () => clearTimeout(t)

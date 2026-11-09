@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAgendaVersion } from '../session/context.ts'
 import { CalendarCheck, CalendarDays, Coffee, Radio, Users } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../../api.ts'
 import { roomLabel } from '../schedule/time.ts'
@@ -42,11 +43,13 @@ export default function DashTiles({ data }: { data: DashboardData }) {
   const [now, setNow] = useState<NowSummary | null>(null)
   const [failed, setFailed] = useState(false)
 
+  const agendaVersion = useAgendaVersion()
+
   useEffect(() => {
     getJSON<NowSummary>('now', { user_id: DEMO_USER })
       .then(setNow)
       .catch(() => setFailed(true))
-  }, [])
+  }, [agendaVersion]) // refetch when the session drawer changes the agenda
 
   const people = data.people
   const peopleTile = (

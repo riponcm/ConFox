@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAgendaVersion } from '../components/session/context.ts'
 import { Link } from 'react-router'
 import { CalendarDays, ChevronDown, Coffee, FileText, Radio, Users } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
@@ -232,11 +233,13 @@ export default function Now() {
   const [data, setData] = useState<NowResponse | null>(null)
   const [failed, setFailed] = useState(false)
 
+  const agendaVersion = useAgendaVersion()
+
   useEffect(() => {
     getJSON<NowResponse>('now', { user_id: DEMO_USER })
       .then(setData)
       .catch(() => setFailed(true))
-  }, [])
+  }, [agendaVersion]) // refetch when the session drawer changes the agenda
 
   return (
     <section className="page now" aria-labelledby="page-title">
