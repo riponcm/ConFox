@@ -57,3 +57,4 @@ Export switches on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. A demo-only e
 | One `.env` at the repo root for both halves | Only `VITE_*` values reach the browser bundle; everything else stays server side |
 | Explicit mappings, one index rebuilt at a time | Dates and keywords behave predictably in filters and aggregations; reloading sessions never wipes people or agendas |
 | Times stored as local conference time | The source has no offset and every attendee reads the schedule in Salt Lake City time |
+| ASGI `send`/`receive` spans excluded | One server span per request keeps traces readable; Elasticsearch calls still appear as child spans |
