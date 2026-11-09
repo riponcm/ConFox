@@ -48,6 +48,16 @@ Planned: vectors on sessions and people (pull request 3), transcripts (pull requ
 
 Export switches on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. A demo-only endpoint (`POST /api/debug/break`, off by default) sends Elasticsearch a query it rejects, so Dash0 has a real error to find.
 
+## How features plug in
+
+| Piece | Where | Rule |
+|---|---|---|
+| API routes | `backend/app/routers/<feature>.py` defining `router = APIRouter(prefix="/api/<feature>")` | Discovered automatically; never edit `main.py` to add a feature |
+| Current time | `app.clock.now()` | Demo moment (`DEMO_NOW`, Monday 8:40) or real Salt Lake City time; naive, like the schedule |
+| Signed-in user | `settings.demo_user` / `GET /api/meta` | `emma` in the demo |
+| Frontend calls | `getJSON` / `postJSON` from `src/api.ts` | Same-origin `/api`, so browser and API spans join one trace |
+| Feature UI | `src/pages/<Page>.tsx` plus `src/components/<feature>/` and `src/styles/<feature>.css` | Keeps parallel features out of each other's files |
+
 ## Key decisions
 
 | Decision | Why |

@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     idx_sessions: str = "confox-sessions"
     idx_people: str = "confox-people"
     idx_agenda: str = "confox-agenda"
+    idx_transcripts: str = "confox-transcripts"
+
+    # The demo runs on Emma's Monday morning. Leave DEMO_NOW empty to use the real clock in Salt Lake City.
+    demo_now: str = "2026-11-09T08:40:00"
+    demo_user: str = "emma"
+
+    # Server-side keys only; never exposed to the browser.
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    llm_model: str = "claude-opus-5-5"
+    embed_model: str = "text-embedding-3-small"
+    embed_dims: int = 1536
 
     service_name: str = "confox-api"
     deployment_environment: str = "hackathon"

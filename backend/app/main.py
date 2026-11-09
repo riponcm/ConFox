@@ -7,6 +7,7 @@ from opentelemetry import trace
 
 from .config import settings
 from .es import es
+from .routers import include_all
 from .telemetry import instrument_app, setup_telemetry
 
 setup_telemetry()
@@ -15,6 +16,8 @@ log = logging.getLogger(__name__)
 
 app = FastAPI(title="Confox API")
 instrument_app(app)
+included = include_all(app)
+log.info("routers: %s", ", ".join(included))
 
 
 @app.get("/api/health")
