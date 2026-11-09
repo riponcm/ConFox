@@ -1,5 +1,5 @@
 /* People and Match. Colours come only from the tokens in index.css. */
-.people-page { max-width: 820px; }
+.people-page { max-width: 1320px; }
 
 .people-sr-only {
   position: absolute;
@@ -48,7 +48,7 @@
   cursor: pointer;
 }
 .segmented-option:hover { color: var(--text); }
-.segmented-option[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.segmented-option[aria-selected="true"] { background: var(--accent-fill); color: var(--on-accent); }
 
 .match-filters { display: flex; flex-direction: column; gap: 12px; }
 .group-chip,
@@ -71,9 +71,9 @@
   color: var(--text-2);
 }
 .group-chip:hover { background: var(--panel-2); color: var(--text); }
-.group-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+.group-chip[aria-pressed="true"] { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--on-accent); }
 .group-count { color: var(--muted); }
-.group-chip[aria-pressed="true"] .group-count { color: var(--accent-ink); }
+.group-chip[aria-pressed="true"] .group-count { color: var(--on-accent); opacity: 0.85; }
 
 .active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .active-chip { padding: 4px 8px 4px 12px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-ink); }

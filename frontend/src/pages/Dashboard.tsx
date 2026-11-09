@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { BarChart3, Building2, Clock, Database, Globe, Layers, RefreshCw } from 'lucide-react'
 import { getJSON } from '../api.ts'
 import HealthLine from '../components/HealthLine.tsx'
+import HeroRow from '../components/dashboard/HeroRow.tsx'
 import NextUp from '../components/dashboard/NextUp.tsx'
 import RankList from '../components/dashboard/RankList.tsx'
 import StatRow from '../components/dashboard/StatRow.tsx'
@@ -86,6 +87,7 @@ export default function Dashboard() {
 
       {data && (
         <div className={loading ? 'dash-body is-refreshing' : 'dash-body'}>
+          {data.is_today && <HeroRow />}
           <StatRow data={data} dayName={dayLabel(data.day)} />
 
           <article className="dash-card dash-card-wide" aria-labelledby="dash-timeline-title">
