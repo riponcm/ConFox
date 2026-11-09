@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "elasticsearch>=9,<10",
     "pydantic-settings>=2.6",
+    "opentelemetry-api>=1.30",
 ]
 
 [dependency-groups]
