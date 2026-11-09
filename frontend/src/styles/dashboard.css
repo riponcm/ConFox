@@ -204,3 +204,8 @@
   .dash-card { padding: 14px; }
   .dash-head-actions { width: 100%; }
 }
+
+/* A clickable session title in a ranked row: a <button> lays out as a block, so the whole title used to be
+   cut to "...". Make the row a flex line and let only the title shrink with an ellipsis. */
+.dash-rank-name:has(.session-link) { display: flex; align-items: baseline; gap: 0.3em; }
+.dash-rank-name .session-link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
