@@ -1,3 +1,5 @@
+import type { Session } from '../../types.ts'
+
 // Shapes returned by /api/schedule and /api/search. Kept local to the Schedule feature.
 
 export type ScheduleSession = {
@@ -56,6 +58,7 @@ export type SearchResponse = {
   mode: string
   took_ms: number
   total: number
-  results: ScheduleSession[]
+  // The search API returns every session field, so results also fit the shared Session type.
+  results: (Session & { score?: number })[]
   facets?: Partial<Record<'day' | 'kind' | 'track' | 'level', Bucket[]>>
 }

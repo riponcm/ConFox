@@ -1,4 +1,4 @@
-import { ScheduleRow } from './ScheduleRow.tsx'
+import SessionCard from '../SessionCard.tsx'
 import { dayLabel } from './time.ts'
 import type { SearchResponse } from './types.ts'
 
@@ -35,9 +35,15 @@ export default function SearchResults({ data, day, onPickDay }: Props) {
       {data.results.length === 0 ? (
         <p className="sch-empty">No sessions match. Try other words.</p>
       ) : (
-        <ul className="sch-list">
+        <ul className="sch-list sch-results-list">
           {data.results.map((s) => (
-            <ScheduleRow key={s.id} session={s} showDay={s.day && s.day !== day ? dayLabel(s.day) : undefined} />
+            <li key={s.id}>
+              {/* The shared SessionCard (built by FIZ55) renders search results; the day shows when it differs. */}
+              <SessionCard
+                session={s}
+                aside={s.day && s.day !== day ? <span className="sch-muted">{dayLabel(s.day)}</span> : undefined}
+              />
+            </li>
           ))}
         </ul>
       )}
