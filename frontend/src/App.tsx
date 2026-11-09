@@ -1,23 +1,31 @@
-import { useEffect, useState } from 'react'
+import { createBrowserRouter, Navigate } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
+import Shell from './components/Shell.tsx'
+import Ask from './pages/Ask.tsx'
+import Brief from './pages/Brief.tsx'
+import CatchUp from './pages/CatchUp.tsx'
+import Dashboard from './pages/Dashboard.tsx'
+import Now from './pages/Now.tsx'
+import People from './pages/People.tsx'
+import Schedule from './pages/Schedule.tsx'
 
-type Health = { status: string; elasticsearch: string }
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <Shell />,
+    children: [
+      { index: true, element: <Dashboard /> },
+      { path: 'now', element: <Now /> },
+      { path: 'schedule', element: <Schedule /> },
+      { path: 'people', element: <People /> },
+      { path: 'ask', element: <Ask /> },
+      { path: 'brief', element: <Brief /> },
+      { path: 'catch-up', element: <CatchUp /> },
+      { path: '*', element: <Navigate to="/" replace /> },
+    ],
+  },
+])
 
 export default function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch(() => setHealth({ status: 'down', elasticsearch: 'unknown' }))
-  }, [])
-
-  return (
-    <main style={{ padding: 24 }}>
-      <h1>Confox</h1>
-      <p style={{ color: 'var(--muted)' }}>
-        API: {health?.status ?? '…'} · Elasticsearch: {health?.elasticsearch ?? '…'}
-      </p>
-    </main>
-  )
+  return <RouterProvider router={router} />
 }
