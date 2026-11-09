@@ -9,10 +9,10 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/now', label: 'Now', icon: Clock },
   { to: '/schedule', label: 'Schedule', icon: CalendarDays },
   { to: '/people', label: 'People', icon: Users },
-  { to: '/ask', label: 'Ask', icon: MessageCircle },
 ]
 
 export const SECONDARY_NAV: NavItem[] = [
   { to: '/brief', label: 'My brief', icon: FileText },
   { to: '/catch-up', label: 'Catch up', icon: History },
+  { to: '/ask', label: 'Ask', icon: MessageCircle },
 ]
