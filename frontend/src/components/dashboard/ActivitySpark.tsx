@@ -22,6 +22,8 @@ export default function ActivitySpark({ data }: { data: DashboardData }) {
   }
 
   const n = buckets.length
+  // Today's histogram can be empty (before 07:00) while the day already has events: never index past the data.
+  const shown = active !== null && active >= 0 && active < n ? active : null
   const max = Math.max(1, ...buckets.map((b) => b.count))
   const plotH = H - PAD_T - PAD_B
   const x = (i: number) => PAD_X + (n > 1 ? (i / (n - 1)) * (width - 2 * PAD_X) : (width - 2 * PAD_X) / 2)
@@ -46,6 +48,7 @@ export default function ActivitySpark({ data }: { data: DashboardData }) {
     const keys: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1 }
     if (e.key in keys) {
       e.preventDefault()
+      if (n === 0) return
       setActive((i) => Math.min(n - 1, Math.max(0, (i ?? n - 1) + keys[e.key])))
     } else if (e.key === 'Escape') {
       setActive(null)
@@ -61,7 +64,7 @@ export default function ActivitySpark({ data }: { data: DashboardData }) {
         role="group"
         aria-label="Confox events per half hour. Use the left and right arrow keys to read each half hour."
         onKeyDown={onKeyDown}
-        onFocus={() => setActive((i) => i ?? n - 1)}
+        onFocus={() => n > 0 && setActive((i) => i ?? n - 1)}
         onBlur={() => setActive(null)}
         onPointerMove={(e) => n && setActive(indexAt(e.clientX, e.currentTarget))}
         onPointerLeave={() => setActive(null)}
@@ -74,12 +77,12 @@ export default function ActivitySpark({ data }: { data: DashboardData }) {
             <line x1={0} x2={width} y1={PAD_T + plotH} y2={PAD_T + plotH} stroke="var(--chart-axis)" />
             <path d={area} fill="var(--accent)" fillOpacity={0.12} />
             <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            {active !== null && (
+            {shown !== null && (
               <>
-                <line x1={x(active)} x2={x(active)} y1={PAD_T} y2={PAD_T + plotH} stroke="var(--chart-axis)" />
+                <line x1={x(shown)} x2={x(shown)} y1={PAD_T} y2={PAD_T + plotH} stroke="var(--chart-axis)" />
                 <circle
-                  cx={x(active)}
-                  cy={y(buckets[active].count)}
+                  cx={x(shown)}
+                  cy={y(buckets[shown].count)}
                   r={4}
                   fill="var(--accent)"
                   stroke="var(--panel)"
@@ -95,20 +98,20 @@ export default function ActivitySpark({ data }: { data: DashboardData }) {
             </text>
           </svg>
         )}
-        {active !== null && (
+        {shown !== null && (
           <div
             className="dash-tip"
-            style={{ left: Math.min(Math.max(x(active), 80), width - 80), top: -34 }}
+            style={{ left: Math.min(Math.max(x(shown), 80), width - 80), top: -34 }}
             aria-hidden="true"
           >
             <p>
-              <strong>{fmt(buckets[active].count)}</strong> {buckets[active].count === 1 ? 'event' : 'events'},{' '}
-              {hhmm(buckets[active].start)}&ndash;{endOf(active).replace(' so far', '')}
+              <strong>{fmt(buckets[shown].count)}</strong> {buckets[shown].count === 1 ? 'event' : 'events'},{' '}
+              {hhmm(buckets[shown].start)}&ndash;{endOf(shown).replace(' so far', '')}
             </p>
           </div>
         )}
         <p className="dash-sr-only" aria-live="polite">
-          {active === null ? '' : readout(active)}
+          {shown === null ? '' : readout(shown)}
         </p>
       </div>
       <p className="dash-kinds">
