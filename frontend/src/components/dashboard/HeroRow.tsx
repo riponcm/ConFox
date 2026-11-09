@@ -70,6 +70,7 @@ export default function HeroRow() {
               <time dateTime={mine.starts_at}>{hhmm(mine.starts_at)}</time>&ndash;
               <time dateTime={mine.ends_at}>{hhmm(mine.ends_at)}</time>
             </p>
+            <p className="sample-note">Agenda items are generated sample data.</p>
           </>
         ) : (
           <p className="dash-tile-big">Nothing else today</p>
