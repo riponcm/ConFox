@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-labelledby="t d">
+  <title id="t">Confox</title>
+  <desc id="d">Confox: find the right talk, meet the right people, catch up on what you missed.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0c1f"/>
+      <stop offset="0.6" stop-color="#151a3d"/>
+      <stop offset="1" stop-color="#1f1650"/>
+    </linearGradient>
+    <linearGradient id="fox" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb347"/>
+      <stop offset="1" stop-color="#ff5f6d"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7c83ff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#7c83ff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#7c83ff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff8a5c" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ff8a5c" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="frame"><rect width="1200" height="340" rx="18"/></clipPath>
+    <style>
+      .node { fill: #9aa0ff; animation: pulse 4s ease-in-out infinite; }
+      .n2 { animation-delay: .8s } .n3 { animation-delay: 1.6s } .n4 { animation-delay: 2.4s } .n5 { animation-delay: 3.2s }
+      .link { stroke: #7c83ff; stroke-width: 1.4; stroke-dasharray: 6 8; opacity: .45; animation: flow 6s linear infinite; }
+      .sweep { animation: sweep 7s ease-in-out infinite; }
+      .glow { animation: breathe 5s ease-in-out infinite; transform-origin: 190px 170px; }
+      .fox { animation: float 6s ease-in-out infinite; }
+      .title { font: 800 84px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #f1f2ff; letter-spacing: -1px; }
+      .tag { font: 500 22px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #b9bce6; opacity: 0; animation: rise 1s ease-out .4s forwards; }
+      .chip rect { fill: #1d2150; stroke: #3b4194; }
+      .chip text { font: 600 17px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #d8daff; }
+      .chip { opacity: 0; animation: rise .8s ease-out forwards; }
+      .c1 { animation-delay: 1.0s } .c2 { animation-delay: 1.3s } .c3 { animation-delay: 1.6s } .c4 { animation-delay: 1.9s }
+      @keyframes pulse { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+      @keyframes flow { to { stroke-dashoffset: -140 } }
+      @keyframes sweep { 0% { transform: translateX(-700px) } 100% { transform: translateX(1300px) } }
+      @keyframes breathe { 0%,100% { transform: scale(1); opacity: .8 } 50% { transform: scale(1.12); opacity: 1 } }
+      @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+      @keyframes rise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
+      @media (prefers-reduced-motion: reduce) {
+        * { animation: none !important; }
+        .tag, .chip { opacity: 1; }
+      }
+    </style>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="340" fill="url(#bg)"/>
+    <rect class="sweep" x="0" y="0" width="600" height="340" fill="url(#sweep)"/>
+
+    <!-- people and talks, connecting -->
+    <g>
+      <line class="link" x1="900" y1="50" x2="1010" y2="92"/>
+      <line class="link" x1="1010" y1="92" x2="1130" y2="56"/>
+      <line class="link" x1="1130" y1="56" x2="1172" y2="150"/>
+      <line class="link" x1="1172" y1="150" x2="1160" y2="262"/>
+      <line class="link" x1="1160" y1="262" x2="1078" y2="292"/>
+      <line class="link" x1="1078" y1="292" x2="960" y2="302"/>
+      <circle class="node" cx="900" cy="50" r="5"/>
+      <circle class="node n2" cx="1010" cy="92" r="8"/>
+      <circle class="node n3" cx="1130" cy="56" r="6"/>
+      <circle class="node n4" cx="1172" cy="150" r="6"/>
+      <circle class="node n5" cx="1160" cy="262" r="7"/>
+      <circle class="node n2" cx="1078" cy="292" r="5"/>
+      <circle class="node n3" cx="960" cy="302" r="5"/>
+    </g>
+
+    <!-- fox mark -->
+    <circle class="glow" cx="190" cy="170" r="120" fill="url(#glow)"/>
+    <g class="fox">
+      <g transform="translate(190 172) scale(1.7)">
+        <polygon points="-40,-50 -16,-24 16,-24 40,-50 46,-4 0,42 -46,-4" fill="url(#fox)"/>
+        <polygon points="-46,-4 -14,8 0,42" fill="#fde9e4"/>
+        <polygon points="46,-4 14,8 0,42" fill="#fde9e4"/>
+        <polygon points="-36,-42 -22,-26 -32,-22" fill="#7a2335" opacity=".55"/>
+        <polygon points="36,-42 22,-26 32,-22" fill="#7a2335" opacity=".55"/>
+        <circle cx="-15" cy="-6" r="3.6" fill="#1b1033"/>
+        <circle cx="15" cy="-6" r="3.6" fill="#1b1033"/>
+        <circle cx="0" cy="36" r="4" fill="#1b1033"/>
+      </g>
+    </g>
+
+    <text class="title" x="340" y="150">Confox</text>
+    <text class="tag" x="344" y="196">Find the right talk. Meet the right people. Catch up on what you missed.</text>
+
+    <g transform="translate(344 228)">
+      <g class="chip c1"><rect width="98" height="36" rx="18"/><text x="49" y="24" text-anchor="middle">Search</text></g>
+      <g transform="translate(110 0)"><g class="chip c2"><rect width="92" height="36" rx="18"/><text x="46" y="24" text-anchor="middle">Match</text></g></g>
+      <g transform="translate(214 0)"><g class="chip c3"><rect width="74" height="36" rx="18"/><text x="37" y="24" text-anchor="middle">Ask</text></g></g>
+      <g transform="translate(300 0)"><g class="chip c4"><rect width="118" height="36" rx="18"/><text x="59" y="24" text-anchor="middle">Catch up</text></g></g>
+    </g>
+  </g>
+</svg>
