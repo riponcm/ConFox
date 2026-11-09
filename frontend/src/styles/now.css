@@ -1,0 +1,67 @@
+/* Now page */
+.now-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 16px 0 24px;
+}
+.now-tile {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+.now-tile h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.now-tile-food {
+  border-color: var(--warn-soft);
+  background: linear-gradient(var(--warn-soft), var(--warn-soft)), var(--panel);
+}
+.now-tile-food h2 {
+  color: var(--warn);
+}
+.now-big {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.now-sub {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.now-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 10px;
+  font-size: 1rem;
+  color: var(--text);
+}
+.now-count {
+  color: var(--muted);
+  font-weight: 500;
+}
+.now-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.now-empty {
+  color: var(--muted);
+}
