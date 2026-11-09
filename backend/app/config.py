@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     idx_people: str = "confox-people"
     idx_agenda: str = "confox-agenda"
     idx_transcripts: str = "confox-transcripts"
+    idx_activity: str = "confox-activity"
 
     # The demo runs on Emma's Monday morning. Leave DEMO_NOW empty to use the real clock in Salt Lake City.
     demo_now: str = "2026-11-09T08:40:00"

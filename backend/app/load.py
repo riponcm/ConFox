@@ -16,6 +16,7 @@ from opentelemetry import trace
 from .config import RAW_SCHEDULE, settings
 from .data.demo import emma_monday
 from .data.people import sample_attendees, speakers
+from .data.samples import attendee_agendas, sample_activity
 from .data.sessions import build_sessions
 from .embeddings import embed, enabled
 from .es import es
@@ -65,8 +66,8 @@ def _index(index: str, docs: list[dict]) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--only", choices=["sessions", "people", "agenda"], action="append")
-    only = set(parser.parse_args().only or ["sessions", "people", "agenda"])
+    parser.add_argument("--only", choices=["sessions", "people", "agenda", "activity"], action="append")
+    only = set(parser.parse_args().only or ["sessions", "people", "agenda", "activity"])
 
     setup_telemetry(service_name="confox-load")
     try:
@@ -77,8 +78,12 @@ def main() -> None:
             _index(settings.idx_sessions, with_embeddings(sessions, session_text))
         if "people" in only:
             _index(settings.idx_people, with_embeddings(attendees + speakers(raw), person_text))
+        agendas = attendee_agendas(sessions, attendees)
         if "agenda" in only:
-            _index(settings.idx_agenda, emma_monday(sessions, attendees))
+            _index(settings.idx_agenda, emma_monday(sessions, attendees) + agendas)
+        if "activity" in only:
+            # Rebuilding drops recorded real events too; that is the point of a reload before a demo.
+            _index(settings.idx_activity, sample_activity(attendees, agendas))
     finally:
         shutdown_telemetry()
 

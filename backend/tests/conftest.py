@@ -118,3 +118,11 @@ def spans():
     _exporter.clear()
     yield _exporter
     _exporter.clear()
+
+
+@pytest.fixture(autouse=True)
+def no_activity_writes(monkeypatch):
+    """Tests never write analytics events into Elasticsearch."""
+    from app import activity
+
+    monkeypatch.setattr(activity, "record", lambda *a, **k: None)

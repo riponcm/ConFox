@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from opentelemetry import trace
 from pydantic import BaseModel, Field, field_validator
 
-from .. import clock, llm
+from .. import activity, clock, llm
 from ..config import settings
 from ..es import es
 
@@ -195,6 +195,7 @@ def system_prompt(user: dict) -> str:
 @router.post("")
 def ask(body: AskBody) -> StreamingResponse:
     question = body.messages[-1].content
+    activity.record("question", body.user_id, "ask")
     sources, context, user = retrieve(question, body.user_id)
     history = [m.model_dump() for m in body.messages[:-1]]
     latest = "Sources:\n" + ("\n\n".join(context) or "(none found)") + f"\n\nQuestion: {question}"

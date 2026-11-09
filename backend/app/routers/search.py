@@ -16,7 +16,7 @@ from elasticsearch import ApiError
 from fastapi import APIRouter, HTTPException, Query
 from opentelemetry import metrics, trace
 
-from .. import embeddings
+from .. import activity, embeddings
 from ..clock import now
 from ..config import settings
 from ..es import es
@@ -269,6 +269,8 @@ def search(
     span.set_attribute("confox.search.total", results["hits"]["total"]["value"])
     DURATION.record(took_ms, {"mode": used})
     REQUESTS.add(1, {"mode": used})
+    if p.q:
+        activity.record("search", settings.demo_user, p.q)
     return {
         "mode": used,
         "took_ms": took_ms,
