@@ -33,6 +33,21 @@ flowchart LR
 | transcripts | Talk text in chunks, with vectors, for Catch up and Ask |
 | connections | Meeting requests and accepted slots |
 
+## Telemetry (pull request 1)
+
+| Signal | Source | Where it goes |
+|---|---|---|
+| Traces | FastAPI instrumentation for every request; the Elasticsearch 9 client traces its own calls as child spans | Dash0 via OTLP/HTTP |
+| Logs | Python logging, exported with the active trace and span IDs | Dash0 via OTLP/HTTP |
+| Metrics | HTTP server metrics from the instrumentation; product metrics added with each feature | Dash0 via OTLP/HTTP |
+| Browser | Dash0 web SDK: page views, web vitals, fetch calls, errors; adds the trace header to same-origin `/api` calls | Dash0, ingest-only token |
+
+Export switches on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. A demo-only endpoint (`POST /api/debug/break`, off by default) sends Elasticsearch a query it rejects, so Dash0 has a real error to find.
+
 ## Key decisions
 
-To be recorded here as they are made, with the reason for each.
+| Decision | Why |
+|---|---|
+| Load `.env` into the process environment at startup | The OTLP exporters read `OTEL_*` from the environment, not from app settings |
+| No separate Elasticsearch instrumentor | The Elasticsearch 9 Python client has native OpenTelemetry support; the contrib instrumentor disables itself |
+| One `.env` at the repo root for both halves | Only `VITE_*` values reach the browser bundle; everything else stays server side |
