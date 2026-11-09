@@ -186,8 +186,9 @@ class SearchFailed(Exception):
         self.error = error
 
 
-def _msearch(bodies: list[dict]) -> list[dict]:
-    searches = [part for body in bodies for part in ({"index": settings.idx_sessions}, body)]
+def msearch(requests: list[tuple[str, dict]]) -> list[dict]:
+    """One `msearch` over (index, body) pairs; raises SearchFailed for the first body that errored."""
+    searches = [part for index, body in requests for part in ({"index": index}, body)]
     responses = es.msearch(searches=searches)["responses"]
     for r in responses:
         if "error" in r:
@@ -195,7 +196,21 @@ def _msearch(bodies: list[dict]) -> list[dict]:
     return responses
 
 
-def _native_failed(exc: Exception) -> bool:
+def _msearch(bodies: list[dict]) -> list[dict]:
+    return msearch([(settings.idx_sessions, body) for body in bodies])
+
+
+def native_rrf_ok() -> bool:
+    """False once this cluster has refused the native rrf retriever (no licence)."""
+    return _native_rrf is not False
+
+
+def remember_native_rrf(ok: bool) -> None:
+    global _native_rrf
+    _native_rrf = ok
+
+
+def native_failed(exc: Exception) -> bool:
     detail = exc.error if isinstance(exc, SearchFailed) else getattr(exc, "body", None)
     return is_license_error(detail) or is_license_error(exc)
 
@@ -220,7 +235,7 @@ def run(p: SearchParams, mode: Mode, at: datetime) -> tuple[Used, dict, dict]:
             _native_rrf = True
             return "hybrid", results, facets
         except (ApiError, SearchFailed) as exc:
-            if not _native_failed(exc):
+            if not native_failed(exc):
                 raise
             _native_rrf = False
             log.warning("native rrf retriever not licensed on this cluster; using client-side RRF from now on: %s", exc)
