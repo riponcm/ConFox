@@ -73,6 +73,22 @@ def _write_agenda(group: dict, user_ids: list[str]) -> None:
     agenda.refresh()
 
 
+def _busy_at(user_id: str, slot: dict | None, group_id: str) -> dict | None:
+    """The user's confirmed item that overlaps the meetup slot (co-located days aside), other than this meetup."""
+    if not slot:
+        return None
+    items = [i for i in agenda.user_items(user_id) if i.get("id") != store.agenda_item_id(user_id, group_id)]
+    kinds = agenda.session_kinds([i.get("session_id") or "" for i in items])
+    return next(
+        (
+            i
+            for i in agenda.blocking(items, kinds)
+            if agenda.overlaps(slot["starts_at"], slot["ends_at"], i["starts_at"], i["ends_at"])
+        ),
+        None,
+    )
+
+
 def _drop_agenda(group_id: str, user_id: str) -> None:
     try:
         es.delete(index=settings.idx_agenda, id=store.agenda_item_id(user_id, group_id))
@@ -169,6 +185,14 @@ def propose(body: Propose) -> dict:
 def join(group_id: str, user_id: str = _user_id()) -> dict:
     """Join a group (idempotent). If its time is already fixed, the meetup goes straight onto the user's agenda."""
     user = _profile(user_id)
+    try:
+        current, _ = store.get(group_id)
+    except store.GroupError as exc:
+        raise _http(exc) from exc
+    if current.get("status") == "fixed" and not store.is_member(current, user_id):
+        busy = _busy_at(user_id, current.get("fixed_slot"), group_id)
+        if busy:  # joining would put a second confirmed item at the same time
+            raise HTTPException(status_code=409, detail=f"you already have {busy.get('title') or 'something'} then")
     before, after = _change(group_id, user_id, "join", lambda g: store.join(g, user_id, user.get("name") or user_id))
     if after is not before:
         activity.record("group_join", user_id, group_id)
@@ -181,6 +205,14 @@ def join(group_id: str, user_id: str = _user_id()) -> dict:
 def leave(group_id: str, user_id: str = _user_id()) -> dict:
     """Leave a group and take back the user's votes; a fixed meetup leaves their agenda. The host cannot leave."""
     user = _profile(user_id)
+    try:
+        store.get(group_id)
+    except store.GroupError as exc:
+        if exc.status != 404:
+            raise _http(exc) from exc
+        # The group is gone (for example after a reload of the groups seed): clear its meetup off the agenda.
+        _drop_agenda(group_id, user_id)
+        return {"id": group_id, "removed": True}
     before, after = _change(group_id, user_id, "leave", lambda g: store.leave(g, user_id))
     if after is not before and after.get("status") == "fixed":
         _drop_agenda(group_id, user_id)
@@ -209,9 +241,13 @@ def fix(group_id: str, body: SlotChoice) -> dict:
     """The host fixes one proposed time: the group becomes `fixed` and each member gets a confirmed agenda meeting."""
     user = _profile(body.user_id)
     _, after = _change(group_id, body.user_id, "fix", lambda g: store.fix(g, body.user_id, body.session_id))
-    _write_agenda(after, after.get("members") or [])
+    members = after.get("members") or []
+    # Never double-book: members already busy at that time do not get the meetup on their agenda.
+    busy = [m for m in members if _busy_at(m, after.get("fixed_slot"), group_id)]
+    _write_agenda(after, [m for m in members if m not in busy])
     activity.record("group_fix", body.user_id, group_id)
-    return store.view(after, body.user_id, user)
+    names = dict(zip(members, after.get("member_names") or [], strict=False))
+    return store.view(after, body.user_id, user) | {"busy_members": [names.get(m, m) for m in busy]}
 
 
 # ---------- hallway board ----------
