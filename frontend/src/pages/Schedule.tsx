@@ -14,7 +14,7 @@ const DEBOUNCE_MS = 300
 // Each answer remembers the request it belongs to; anything else is still loading. No state is set inside
 // effects except from responses.
 type Answer<T> = { key: string; data?: T; failed?: boolean }
-type Load<T> = { status: 'loading' | 'error' } | { status: 'ready'; data: T }
+type Load<T> = { status: 'loading' | 'error' | 'empty' } | { status: 'ready'; data: T }
 type SearchState = { status: 'idle' | 'loading' | 'unavailable' } | { status: 'ready'; data: SearchResponse }
 
 export default function Schedule() {
@@ -24,6 +24,7 @@ export default function Schedule() {
   const [forYouOnly, setForYouOnly] = useState(true)
   const [dayAnswer, setDayAnswer] = useState<Answer<DayResponse> | null>(null)
   const [setupFailed, setSetupFailed] = useState(false)
+  const [noDays, setNoDays] = useState(false)
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const [searchAnswer, setSearchAnswer] = useState<Answer<SearchResponse> | null>(null)
@@ -38,6 +39,7 @@ export default function Schedule() {
         const list = d.days.map((x) => x.day).filter((x) => x >= FIRST_DAY)
         setMeta(m)
         setDays(list)
+        setNoDays(list.length === 0)
         const today = m.now.slice(0, 10)
         setDay(list.includes(today) ? today : (list[0] ?? null))
       })
@@ -77,11 +79,13 @@ export default function Schedule() {
 
   const view: Load<DayResponse> = setupFailed
     ? { status: 'error' }
-    : dayAnswer?.key !== day || !dayAnswer
-      ? { status: 'loading' }
-      : dayAnswer.data
-        ? { status: 'ready', data: dayAnswer.data }
-        : { status: 'error' }
+    : noDays
+      ? { status: 'empty' }
+      : dayAnswer?.key !== day || !dayAnswer
+        ? { status: 'loading' }
+        : dayAnswer.data
+          ? { status: 'ready', data: dayAnswer.data }
+          : { status: 'error' }
   const search: SearchState = !debounced
     ? { status: 'idle' }
     : searchAnswer?.key !== searchKey || !searchAnswer
@@ -163,6 +167,9 @@ export default function Schedule() {
 
           {view.status === 'loading' && <p className="sch-note">Loading the schedule&hellip;</p>}
           {view.status === 'error' && <p className="sch-note">Could not load the schedule. Is the API running?</p>}
+          {view.status === 'empty' && (
+            <p className="sch-note">No schedule is loaded yet. Run the data loader (see the README) and reload.</p>
+          )}
           {view.status === 'ready' && <DayView data={view.data} forYouOnly={forYouOnly} />}
           {view.status === 'ready' && (view.data.meetings.length > 0 || view.data.pending.length > 0) && (
             <p className="sample-note">Meetings and agenda items are generated sample data.</p>
