@@ -116,7 +116,7 @@ Kinds fold into five groups for the timeline (talks, keynotes, co-located, break
 
 ## Ask (pull request 8)
 
-`POST /api/ask` answers a question from retrieved sessions and streams the answer as Server-Sent Events.
+`POST /api/ask` answers a question from retrieved sessions, people and transcript chunks, and can recommend people to meet. It streams the answer as Server-Sent Events.
 
 ```mermaid
 sequenceDiagram
@@ -125,7 +125,9 @@ sequenceDiagram
   participant E as Elasticsearch
   participant C as Claude
   B->>A: POST /api/ask {messages, user_id}
-  A->>E: retrieve: BM25 over sessions (top 8), transcript chunks (top 4), user profile
+  A->>A: embed the question once
+  A->>E: one msearch: hybrid sessions (top 8), hybrid people (top 5), transcript chunks (top 4)
+  A->>E: user profile
   A-->>B: data: {type: sources}
   A->>C: chat claude-opus-5-5 (stream)
   C-->>A: text deltas
@@ -135,10 +137,10 @@ sequenceDiagram
 
 | Piece | Where | Notes |
 |---|---|---|
-| Retrieval | `routers/ask.py`, span `retrieve` | `multi_match` over title^3, speaker_names^2, projects^2, track, description; breaks and registration excluded. A day named in the question ("today", "tomorrow", "Wednesday") filters to that day; otherwise today gets a small boost |
-| Prompt | system: role, `clock.now()` spoken ("Monday 9 November, 08:40"), the user's interests and school; latest user turn: numbered sources then the question | Earlier turns are sent back as plain text |
-| Answer | Claude cites `[n]`; the browser shows chips only for the sources the answer cites, with day, time and room | Says so when the sources do not answer |
-| Events | `sources`, `delta`, `done` (tokens, cost, duration, stop reason) or `error` | Counter `confox.chat.requests` (attribute `feature`) |
+| Retrieval | `routers/ask.py`, span `retrieve` | The latest question is embedded once (`embeddings.embed`). One `msearch` runs: **sessions** (BM25 `multi_match` over title^3, speaker_names^2, projects^2, track, description, plus kNN on `embedding`), **people** (BM25 over name^3, title^2, company^2, interests_text^2, bio, plus kNN on the people `embedding`; only kinds `speaker` and `attendee`, never the asking user) and **transcript chunks** (BM25, as before). Each hybrid pair is fused by reciprocal rank fusion (constant 60, window 30, kNN k 20): the native `rrf` retriever, or on a basic licence the same BM25 and kNN lists fetched in the msearch and fused in Python with `search.rrf_fuse` (the licence fallback and its memory are shared with Search). Breaks and registration are excluded; a day named in the question is a filter on both sides, otherwise today gets a small BM25 boost. No `OPENAI_API_KEY`, or a failed embedding call: BM25 only. Span attributes `confox.retrieve.mode` (`hybrid`, `hybrid-client`, `bm25`), `.sessions`, `.people`, `.transcript_chunks` |
+| Prompt | system: role, `clock.now()` spoken ("Monday 9 November, 08:40"), the user's interests and school, rules for people; latest user turn: numbered sources then the question | Sources are numbered sessions, then people, then transcript chunks: `[7] Person: Alice Moreno, ML Engineer at Redwood Labs; interests: ...; sample attendee (generated, not a real person)`. Claude may recommend people, must cite them, must call sample people sample attendees and must not invent contact details. Earlier turns are sent back as plain text |
+| Answer | Claude cites `[n]`; the browser shows chips only for the sources the answer cites | Session chips: day, time and room. Person chips: initials, name, "title · company", a Sample chip for generated attendees, linking to `/people?q=<name>`. Says so when the sources do not answer |
+| Events | `sources`, `delta`, `done` (tokens, cost, duration, stop reason) or `error`. Each source has `n`, `kind` (`session`, `person` or `chunk`), `id`, `title`, `starts_at`, `room`; sessions add `session_kind`, people add `name`, `title` (job title), `company`, `sample`, chunks add `chunk` | Counter `confox.chat.requests` (attribute `feature`) |
 
 ### LLM calls (`app/llm.py`)
 

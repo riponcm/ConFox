@@ -10,8 +10,15 @@ export type Source = {
   title: string
   starts_at: string | null
   room: string | null
+  /** Ask: "session" | "person" | "chunk". Catch up still sends "transcript" for its parts. */
   kind: string | null
   chunk?: number
+  /** Sessions: talk, keynote, ... */
+  session_kind?: string | null
+  /** People. `title` is then the job title. */
+  name?: string
+  company?: string | null
+  sample?: boolean
 }
 
 export type Usage = {
@@ -107,4 +114,15 @@ export function citedNumbers(text: string): number[] {
     if (!seen.includes(n)) seen.push(n)
   }
   return seen
+}
+
+/** "AM" from "Alice Moreno". */
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+}
+
+/** "ML Engineer · Redwood Labs", whichever parts exist. */
+export function roleLine(s: Pick<Source, 'title' | 'company'>): string {
+  return [s.title, s.company].filter(Boolean).join(' \u00b7 ')
 }
