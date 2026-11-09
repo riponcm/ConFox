@@ -1,4 +1,4 @@
-"""Load the schedule snapshot, speakers, sample attendees and Emma's Monday into Elasticsearch.
+"""Load the schedule snapshot, speakers, sample attendees, Emma's Monday and sample meetup groups into Elasticsearch.
 
 uv run python -m app.load                 # everything
 uv run python -m app.load --only sessions # one index; the others are left alone
@@ -15,6 +15,7 @@ from opentelemetry import trace
 
 from .config import RAW_SCHEDULE, settings
 from .data.demo import emma_monday
+from .data.groups import sample_groups, sample_posts
 from .data.people import sample_attendees, speakers
 from .data.samples import attendee_agendas, sample_activity
 from .data.sessions import build_sessions
@@ -66,8 +67,9 @@ def _index(index: str, docs: list[dict]) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--only", choices=["sessions", "people", "agenda", "activity"], action="append")
-    only = set(parser.parse_args().only or ["sessions", "people", "agenda", "activity"])
+    indices = ["sessions", "people", "agenda", "activity", "groups"]
+    parser.add_argument("--only", choices=indices, action="append")
+    only = set(parser.parse_args().only or indices)
 
     setup_telemetry(service_name="confox-load")
     try:
@@ -84,6 +86,9 @@ def main() -> None:
         if "activity" in only:
             # Rebuilding drops recorded real events too; that is the point of a reload before a demo.
             _index(settings.idx_activity, sample_activity(attendees, agendas))
+        if "groups" in only:
+            # Sample meetup groups (and hallway posts); groups created during a demo are dropped.
+            _index(settings.idx_groups, sample_groups(sessions, attendees) + sample_posts(attendees))
     finally:
         shutdown_telemetry()
 

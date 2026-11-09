@@ -19,19 +19,20 @@ flowchart LR
 |---|---|---|
 | Browser app | Pages, navigation, browser telemetry | Pull request 2b |
 | API | One service; every endpoint traced | Pull requests 0, 1 |
-| Elasticsearch | Sessions, people, agendas, transcripts, connections | Pull requests 2, 3 |
+| Elasticsearch | Sessions, people, agendas, transcripts, connections, meetup groups | Pull requests 2, 3 |
 | LLM | Ask and Catch up answers, grounded in retrieved documents | Pull requests 8, 9 |
 | Telemetry | OpenTelemetry to Dash0: traces, metrics, logs, RUM | Pull requests 1, 12 |
 
 ## Data (pull request 2)
 
-`uv run python -m app.load` reads the snapshot in `data/raw/` and fills three indices. `--only sessions|people|agenda` rebuilds one index and leaves the others alone.
+`uv run python -m app.load` reads the snapshot in `data/raw/` and fills three indices. `--only sessions|people|agenda|activity|groups` rebuilds one index and leaves the others alone.
 
 | Index | Holds | Count |
 |---|---|---|
 | `confox-sessions` | Every scheduled session: time (local, no offset), day, room, venue, track, level, CNCF projects, speakers, kind, `is_food` | 600 |
 | `confox-people` | 712 public speaker profiles from the schedule, plus 80 generated attendees marked `sample: true` (Emma and Alice first, then University of Utah alumni) | 792 |
 | `confox-agenda` | Emma's Monday: the co-located AI day, a confirmed coffee with Alice, a pending lunch request (all `sample: true`) | 3 |
+| `confox-groups` | 5 sample meetup groups and 4 hallway board posts (`--only groups`), all `sample: true`; see Groups and connections | 9 |
 
 Session kinds come from the track and the cleaned title: `keynote`, `talk`, `lightning`, `tutorial`, `contribfest`, `poster`, `showcase`, `colocated`, `break`, `registration`. Titles are stripped of emoji first, so "☕ Coffee Break" inside the Project Lightning Talks track is a `break` with `is_food`.
 
@@ -241,6 +242,41 @@ Ids: `{user}-s-{session_id}` for added sessions, `{user}-m-{8 hex}` for new requ
 - **Writes.** Every write refreshes the agenda index so the next read sees it. Counters: `confox.agenda.changes` (attribute `action`: add, remove) and `confox.connect.requests` (`action`: send, accept, decline); the request spans carry the session or person id.
 - **Schedule.** Each day-view row except breaks and registration has an "Agenda" / "Added" toggle; it writes, then reloads the day and the agenda ids, so For you, clashes and the count update together. Search results get the same toggle through the `SessionCard` aside, with state from `GET /api/agenda`. Outgoing requests show as "Request sent".
 - **People.** Every card has a primary "Meet" button that opens an inline panel: the free slots as a native radio group (first one chosen and focused), an optional line, "Send request". After sending, the card says "Request sent for 14:48 · Coffee" and the button becomes a disabled "Requested" (warn colours, since it is pending); people with a pending outgoing request show "Requested" on load, and a confirmed meeting shows as a green chip. Escape closes the panel and returns focus to the button.
+## Groups and connections
+
+The People page has three tabs, kept in the address as `?tab=connections|groups` (Match is the default): **Match** (above), **Connections** and **Groups**. Groups live in `backend/app/routers/groups.py` with the pure rules in `backend/app/groups_store.py`; the UI is `src/components/groups/`, `src/components/connect/ConnectionsTab.tsx` and `src/styles/groups.css`.
+
+**Connections** reads `GET /api/connect`: requests to the user with Accept and Decline, requests they sent with Withdraw, and confirmed meetings (group meetups show as "Group meetup"). It adds no endpoint.
+
+**Groups.** A meetup for people who share a school, country, company, community or interest. Someone proposes it with up to three food or coffee breaks they are free for, others join and vote for the times they can make, and the host fixes one. One document per group in `confox-groups`:
+
+| Field | Meaning |
+|---|---|
+| `type` | `group` (board posts share the index as `post`) |
+| `basis`, `value` | `school`, `country`, `company`, `community` or `interest`, and the shared value ("University of Utah") |
+| `title`, `description` | At most 80 and 280 characters; the title defaults to "University of Utah alumni meetup" and so on |
+| `host_id`, `host_name`, `members`, `member_names`, `max_members` | Host first; names kept in member order so cards need no join; 12 members by default |
+| `proposed_slots`, `votes`, `fixed_slot` | 1 to 3 breaks `{session_id, title, starts_at, ends_at, room}`; `{session_id: [user ids]}`; the chosen slot or null. Stored but not indexed (`enabled: false`), so break ids never become mapping fields |
+| `status`, `created_at`, `sample` | `open` or `fixed`; local time; `true` for seeded groups |
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/groups?user_id` | `{groups, mine}`: groups the user is not in, ranked, and groups they host or joined. Each adds `member_count`, `spots_left`, `is_member`, `is_host`, `match`, `tally` (slots with `votes` and `voted`) and `leading` |
+| `GET /api/groups/suggest?user_id` | `{suggestions: [{basis, value, count, label, title, existing}]}`, at most 6: "University of Utah · 7 people here", with ids of open groups already formed around it |
+| `GET /api/groups/slots?user_id` | Up to 6 breaks the user is free for (the Meet rules from `agenda_store.free_slots`, no other person) |
+| `POST /api/groups {user_id, basis, value, title, description, session_ids}` | The new open group; 422 if a time is not a free break for the host or the input is invalid |
+| `POST /api/groups/{id}/join?user_id`, `/leave?user_id` | The group. Join is idempotent, 409 when full; leaving drops the user's votes; the host cannot leave (409) |
+| `POST /api/groups/{id}/vote {user_id, session_id, vote}` | The group. A member may vote for several times; `vote: false` takes one back; voting on a group joins it first; 422 for a time not proposed, 409 once fixed |
+| `POST /api/groups/{id}/fix {user_id, session_id}` | The fixed group; host only (403), once (409), one of the proposed times (422) |
+
+- **Ranking.** Groups whose value is one of the user's own for the same basis come first, with a `match` reason ("You studied at University of Utah"); then by basis (school, country, community, company, interest), open before fixed, more members first. Suggestions use one `size: 0` search on `confox-people` with a `filters` aggregation per basis over the user's values (company matches current or past), excluding the user, in the same basis order and then by count.
+- **Fixing.** Every member gets a confirmed agenda meeting `{user}-g-{group}` (`kind: meeting`, `group_id`, `with_id` the group, `title` "Meetup: <title>", the break's time and room), so it shows in Agenda, My brief and Connections and blocks that break for Meet. Joining a fixed group writes the joiner's item; leaving deletes it.
+- **Concurrency.** Changes read the group, apply a pure rule and write back with `if_seq_no`/`if_primary_term`; a clash answers 409 and the page reloads.
+- **UI.** "Suggested for you" cards open the Propose dialog (native `<dialog>`) with basis, value and title filled in; times are the free breaks as checkboxes in the shared `SlotList` (radio for Meet, checkboxes here), at most 3. Group cards show the basis chip, member initials and count, each proposed time with a vote bar and a Vote toggle (`aria-pressed`), Join or Leave, and for the host "Fix time" per slot; a fixed group shows its time and "on your agenda". A Match card offers "Propose a University of Utah meetup" from its first school, community, company or interest reason, which switches to Groups with the dialog open.
+- **Hallway board.** Short-lived posts in the same index (`type: post`, `text` up to 140 characters, optional `place`, `tags` limited to the author's own interests, `expires_at` 30, 60 or 180 minutes after posting). `GET /api/groups/board?user_id` returns live posts (expired ones are hidden by `clock.now()`) and meetup groups still to happen, newest first, each with `for_you` (a tag matches the viewer's interests, or the group shares one of their values) and the viewer's `interests` for tagging; `POST /api/groups/board {user_id, text, place, minutes, tags}` posts; `DELETE /api/groups/board/{id}?user_id` lets only the author remove it (403 otherwise). Matching posts are highlighted.
+- **Telemetry.** Counter `confox.groups.changes` (attribute `action`: propose, join, leave, vote, fix, post, unpost); request spans carry `confox.groups.id`, `confox.groups.action` and counts. Activity events `group_propose`, `group_join`, `group_vote`, `group_fix`, `board_post`.
+- **Seed.** `uv run python -m app.load --only groups` rebuilds `confox-groups` alone: University of Utah alumni lunch, Bangladesh meetup, Women in Cloud Native coffee, Kubeflow users and Brasileiros na KubeCon, hosted and joined by sample attendees who share the value (none in Bangladesh, so that one is simply two sample attendees), with votes, plus four board posts until late Monday morning. Emma is in none of them. Everything seeded is labelled "Sample" in the UI.
+
 ## My brief (pull request 10)
 
 One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (day of `clock.now()`) lives in `backend/app/routers/brief.py`; the page is `src/pages/Brief.tsx` with `src/components/brief/` and `src/styles/brief.css`. Nothing new is stored: the endpoint reads `confox-sessions`, `confox-people` and `confox-agenda` and reuses the other features' helpers (schedule `_day_sessions`, `annotate`, `_knn`; Match `build_match_query`, `why`; `next_food()`).
