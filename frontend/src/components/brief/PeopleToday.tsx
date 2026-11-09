@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Check, Clock, Coffee, MessageSquare, Send, X } from 'lucide-react'
+import { Check, Clock, Coffee, MessageSquare, Send, Undo2, X } from 'lucide-react'
 import { ApiError, postJSON } from '../../api.ts'
 import { hhmm, roomLabel } from '../schedule/time.ts'
 import { firstName, initials, mealWord } from './types.ts'
@@ -78,6 +78,55 @@ function RequestCard({ req, onChanged }: { req: MeetingRequest; onChanged: () =>
   )
 }
 
+function OutgoingCard({ req, onChanged }: { req: MeetingRequest; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
+
+  async function withdraw() {
+    setBusy(true)
+    setNote('')
+    try {
+      await postJSON(`connect/${encodeURIComponent(req.id)}/withdraw`, {})
+      onChanged()
+    } catch (err) {
+      const missing = err instanceof ApiError && (err.status === 404 || err.status === 405)
+      setNote(missing ? 'Not available yet' : 'Could not withdraw. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <article className="brief-person">
+      <div className="brief-person-head">
+        <span className="avatar" aria-hidden="true">{initials(req.with_name)}</span>
+        <div className="brief-person-id">
+          <h3>{req.with_name}</h3>
+          <p className="brief-person-sub">You asked to meet</p>
+        </div>
+        <span className="brief-chip brief-chip-warn">Pending</span>
+      </div>
+      <When title={req.title} startsAt={req.starts_at} room={req.room} />
+      <div className="brief-person-actions">
+        <button
+          type="button"
+          className="brief-btn"
+          disabled={busy}
+          onClick={withdraw}
+          aria-label={`Withdraw the request to ${req.with_name}`}
+        >
+          <Undo2 size={15} aria-hidden="true" /> {busy ? 'Withdrawing' : 'Withdraw'}
+        </button>
+      </div>
+      {note && (
+        <p className="brief-person-note" role="status">
+          {note}
+        </p>
+      )}
+    </article>
+  )
+}
+
 export default function PeopleToday({ meetings, incoming, outgoing, people, onChanged }: Props) {
   const empty = !meetings.length && !incoming.length && !outgoing.length && !people.length
   if (empty) return <p className="brief-empty">No meetings or people to suggest today.</p>
@@ -108,17 +157,7 @@ export default function PeopleToday({ meetings, incoming, outgoing, people, onCh
 
       {outgoing.map((r) => (
         <li key={r.id}>
-          <article className="brief-person">
-            <div className="brief-person-head">
-              <span className="avatar" aria-hidden="true">{initials(r.with_name)}</span>
-              <div className="brief-person-id">
-                <h3>{r.with_name}</h3>
-                <p className="brief-person-sub">You asked to meet</p>
-              </div>
-              <span className="brief-chip brief-chip-warn">Pending</span>
-            </div>
-            <When title={r.title} startsAt={r.starts_at} room={r.room} />
-          </article>
+          <OutgoingCard req={r} onChanged={onChanged} />
         </li>
       ))}
 

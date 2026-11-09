@@ -63,6 +63,14 @@ export default function Brief() {
         </h1>
       </header>
       <p className="brief-summary">{data.summary}</p>
+      {failed && (
+        <div className="brief-error" role="alert">
+          <p>Could not refresh your brief, so it may be out of date.</p>
+          <button type="button" className="brief-btn" onClick={load}>
+            <RefreshCw size={15} aria-hidden="true" /> Try again
+          </button>
+        </div>
+      )}
 
       <h2 className="brief-h">
         <Users size={16} aria-hidden="true" /> People today
