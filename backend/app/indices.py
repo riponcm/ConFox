@@ -17,7 +17,8 @@ PROFILE_FIELDS = {
     "projects": {"type": "keyword"},
     "tracks": {"type": "keyword"},
     "looking_for": {"type": "text"},
-    "links": {"type": "keyword", "index": False},
+    # Stored, never searched: profile links are URL strings, speaker links are {title, url} objects.
+    "links": {"type": "object", "enabled": False},
     "visibility": {"type": "keyword"},
     "updated_at": LOCAL_TIME,
 }
