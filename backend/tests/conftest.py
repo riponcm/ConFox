@@ -1,14 +1,23 @@
-"""Shared test fixtures. Tests never call the Claude API: every test gets a fake client."""
+"""Shared test fixtures. Tests never call the Claude API: every test gets a fake client.
 
-from types import SimpleNamespace
+Tests never send telemetry either. The app loads .env at import time, and a developer's .env points at Dash0, so
+test runs used to export their deliberately failing requests and pollute the real error rate (found with Dash0
+Agent0). An empty endpoint set here, before the app is imported, wins over .env (load_dotenv does not override).
+"""
 
-import pytest
-from opentelemetry import trace
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+import os
 
-from app import llm
-from app.main import app  # noqa: F401  (installs the tracer provider before spans are recorded)
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
+
+from types import SimpleNamespace  # noqa: E402
+
+import pytest  # noqa: E402
+from opentelemetry import trace  # noqa: E402
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # noqa: E402
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter  # noqa: E402
+
+from app import llm  # noqa: E402
+from app.main import app  # noqa: E402, F401  (installs the tracer provider before spans are recorded)
 
 _exporter = InMemorySpanExporter()
 trace.get_tracer_provider().add_span_processor(SimpleSpanProcessor(_exporter))
