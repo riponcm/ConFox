@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.2.4",
     "opentelemetry-instrumentation-logging>=0.66b0",
     "anthropic>=2.7.0",
+    "openai>=3.48.0",
 ]
 
 [dependency-groups]
