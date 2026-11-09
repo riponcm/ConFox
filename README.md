@@ -87,6 +87,18 @@ cd frontend && npm install && npm run dev
 Open http://localhost:5173 — the page shows whether the API and Elasticsearch are up.
 How we work (branches, checks, review): [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Team
+
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/riponcm"><img src="https://github.com/riponcm.png?size=120" width="80" alt="riponcm"><br><b>riponcm</b></a></td>
+    <td align="center"><a href="https://github.com/FIZ55"><img src="https://github.com/FIZ55.png?size=120" width="80" alt="FIZ55"><br><b>FIZ55</b></a></td>
+    <td align="center"><a href="https://github.com/yuzimeng2000-coder"><img src="https://github.com/yuzimeng2000-coder.png?size=120" width="80" alt="yuzimeng2000-coder"><br><b>yuzimeng2000-coder</b></a></td>
+  </tr>
+</table>
+
+Who built what is visible in the pull requests and commit history.
+
 ## AI use
 
 We use [Claude Code](https://claude.com/claude-code) (Anthropic) as a coding assistant. The team decides the design, reviews and tests every change, and can explain every part of the code. Pull requests are also reviewed by Gitar. Any generated sample data in the app is labelled as such.
