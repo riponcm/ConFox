@@ -169,6 +169,15 @@ def test_save_refuses_unknown_tracks_and_users(monkeypatch):
     client = TestClient(app)
     r = client.put("/api/profile/emma", json=form(tracks=["Made up"]))
     assert r.status_code == 422 and r.json()["detail"][0]["loc"] == ["body", "tracks"]
-    assert client.put("/api/profile/nobody", json=form()).status_code == 404
+    assert client.put("/api/profile/nobody", json=form()).status_code == 403  # only the signed-in user can save
     assert client.put("/api/profile/emma", json=form(bio="b" * 501)).status_code == 422
     assert fake.written is None
+
+
+def test_only_the_signed_in_user_can_save_a_profile():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    r = TestClient(app).put("/api/profile/alice", json={"name": "Mallory"})
+    assert r.status_code == 403

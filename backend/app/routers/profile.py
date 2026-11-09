@@ -233,7 +233,12 @@ def get_profile(user_id: str) -> dict:
 
 @router.put("/{user_id}")
 def save_profile(user_id: str, update: ProfileIn) -> dict:
-    """Validate, rebuild interests_text and the embedding, write with refresh, return the profile and what changed."""
+    """Validate, rebuild interests_text and the embedding, write with refresh, return the profile and what changed.
+
+    Until real sign-in exists, the only person who can save is the signed-in demo user.
+    """
+    if user_id != settings.demo_user:
+        raise HTTPException(status_code=403, detail="you can only edit your own profile")
     with tracer.start_as_current_span("profile.save") as span:
         span.set_attribute("confox.profile.user", user_id)
         if bad := unknown_tracks(update.tracks, _known_tracks()):
