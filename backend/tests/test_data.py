@@ -74,3 +74,12 @@ def test_emma_monday(sessions):
     assert items["emma-coffee-alice"]["with_id"] == "alice"
     assert items["emma-lunch-request"]["status"] == "pending"
     assert all(i["sample"] for i in items.values())
+
+
+def test_people_links_mapping_accepts_profile_and_speaker_links():
+    """Profile links are URL strings and speaker links are {title, url}; one mapping must hold both."""
+    from app.config import settings
+    from app.indices import MAPPINGS
+
+    links = MAPPINGS[settings.idx_people]["properties"]["links"]
+    assert links == {"type": "object", "enabled": False}
