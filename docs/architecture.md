@@ -93,16 +93,20 @@ flowchart LR
 
 Export switches on only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. A demo-only endpoint (`POST /api/debug/break`, off by default) sends Elasticsearch a query it rejects, so Dash0 has a real error to find.
 
-## Dashboard (pull request 5)
+## Dashboard (pull request 5, reworked)
 
-"The conference pulse" for one day, built only from Elasticsearch aggregations. `GET /api/dashboard?day=YYYY-MM-DD` (default: the day of `clock.now()`) makes two `size: 0` searches; the response shape is documented in `backend/app/routers/dashboard.py`.
+"The conference pulse" for one day, built only from Elasticsearch aggregations. `GET /api/dashboard?day=YYYY-MM-DD` (default: the day of `clock.now()`) makes one `msearch` with four `size: 0` bodies; the response shape is documented in `backend/app/routers/dashboard.py`. Next coffee and what is on now still come from `GET /api/now`, so the page makes two API calls.
 
-| Request | Aggregations | Feeds |
+| Body | Aggregations | Feeds |
 |---|---|---|
-| `confox-sessions` | `cardinality` of `speaker_ids` and `track` (week); `terms` on `day` (day selector); a `filter` on the day holding `cardinality` (speakers, tracks), `terms` on `track` (top 10) and `kind`, a `date_histogram` on `starts_at` (30 minutes, 07:00 to 19:00, empty buckets kept) with `terms` on `kind` per bucket, and a `filter` on the next 90 minutes (registration left out) with `top_hits` | Stat tiles, timeline, starting soon, top tracks |
-| `confox-people` | `filter` on `sample: true` with `terms` and `cardinality` on `country`; `filter` on `kind: speaker` with `terms` on `company` | Attendee count and countries, speaker companies |
+| `confox-sessions` | `terms` on `day` (week); a `filter` on the day with `terms` on `track` and a `date_histogram` on `starts_at` (30 minutes, 07:00 to 19:00, empty buckets kept) | Day selector, Happening count, timeline, Tracks, Week |
+| `confox-people` | `terms` on `kind`; `filter` on `sample: true`; a `filter` on attendees with `terms` on `country`, `schools`, `company`, `interests` and a `filter` counting University of Utah alumni | People here, Where people are from, Universities, Companies, Interests |
+| `confox-agenda` | a `filter` on confirmed session items starting after now on the day with `terms` on `session_id` (ordered by count, then a `min` of `starts_at`) and `top_hits` for the title; a `filter` on the user's items on the day with `top_hits` | Filling up next, My day, agenda dots on the timeline |
+| `confox-activity` | a `filter` on the day with `terms` on `kind`, a `filter` on `sample` and a `date_histogram` on `at`; a `filter` on `kind: search` with `terms` on `detail` (the whole week) | Confox activity, What people want |
 
-Kinds fold into five groups for the timeline (talks, keynotes, co-located, breaks and food, other); the folding lives in Python so it is unit tested against hand-written aggregation responses. The page draws the stacked bars in plain SVG with a now line, hover and keyboard readouts, and a visually hidden table of every value. Chart colours are the `--chart-*` tokens in `index.css`, five categorical slots validated for colour-vision deficiency against the panel colour. Attendee numbers are labelled as sample data.
+Python shapes the buckets: it merges the user's confirmed items into covered hours (overlaps counted once, against an 8-hour day), counts pending incoming meet requests, marks which half hours hold one of the user's items, stops today's activity buckets at the current half hour, and puts University of Utah first among universities (the host city; the rest follow by count). Each step is a pure function tested against hand-written responses; if one body of the `msearch` fails, the endpoint answers 503.
+
+The page shows four tiles (next coffee, happening, people here, my day with a progress ring), a single-colour bar chart of sessions starting per half hour (past half hours lighter, a dot where the user has an agenda item, a dashed now line, hover and keyboard readouts and a visually hidden table), then nine ranked-bar cards in a 3, 2 or 1 column grid. On a day other than today the personal tiles and the now line are hidden. Attendee profiles, agendas and most activity are labelled as sample data.
 
 ## How features plug in
 
