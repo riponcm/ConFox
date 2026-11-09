@@ -1,11 +1,27 @@
-import PagePlaceholder from '../components/PagePlaceholder.tsx'
+import { DEMO_USER } from '../api.ts'
+import ChatThread from '../components/ask/ChatThread.tsx'
+import '../styles/ask.css'
+
+const STARTERS = [
+  'Which talks today are about running LLM inference cheaply on GPUs?',
+  'Where should I go this week to learn about GPU scheduling with Kubeflow or KServe?',
+  'What did the Tuesday keynotes say about running AI agents safely?',
+]
 
 export default function Ask() {
   return (
-    <PagePlaceholder
-      title="Ask"
-      description="Ask a question and get an answer that cites real sessions."
-      pr={8}
-    />
+    <section className="page ask-page" aria-labelledby="page-title">
+      <h1 id="page-title">Ask Confox</h1>
+      <p className="page-lead">
+        Ask about the schedule. Answers come from the sessions Confox finds, with numbered sources you can check.
+      </p>
+      <ChatThread
+        endpoint="ask"
+        extraBody={{ user_id: DEMO_USER }}
+        label="Ask Confox conversation"
+        placeholder="Ask about talks, speakers, rooms or times"
+        starters={STARTERS}
+      />
+    </section>
   )
 }
