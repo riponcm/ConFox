@@ -80,7 +80,7 @@ Rules:
 
 ## Rules (from `.gitar/review/confox.md`)
 
-- No emoji in code or tests. If you need a symbol in a test string, write it as an escape (`"☕ Coffee Break"`).
+- No emoji in code or tests. If you need a symbol in a test string, write it as an escape (`"\u2615 Coffee Break"`).
 - Keep it pure: no Elasticsearch client, no environment variables, no network, so it is fast and testable.
 - Type hints and a short docstring; ruff must pass (line length 120).
 
