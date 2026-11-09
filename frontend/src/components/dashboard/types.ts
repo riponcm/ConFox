@@ -1,57 +1,35 @@
 /** Shape of GET /api/dashboard (see backend/app/routers/dashboard.py). */
 
-export type Group = 'talks' | 'keynotes' | 'colocated' | 'breaks' | 'other'
-
-export type TimelineBucket = { start: string; total: number; counts: Record<Group, number> }
+export type TimelineBucket = { start: string; total: number; mine: number }
+export type Named = { name: string; count: number; pinned?: boolean }
 
 export type DashboardData = {
   day: string
   now: string
   is_today: boolean
   days: { day: string; sessions: number }[]
-  stats: {
-    sessions_total: number
-    sessions_day: number
-    speakers_total: number
-    speakers_day: number
-    tracks_total: number
-    tracks_day: number
-    sample_attendees: number
-    countries: number
-  }
-  timeline: { interval_minutes: number; groups: Group[]; buckets: TimelineBucket[] }
-  next_up: { id: string; title: string; starts_at: string; room: string; kind: string }[]
-  next_up_total: number
+  sessions: { total: number; day: number }
+  timeline: { interval_minutes: number; buckets: TimelineBucket[] }
   tracks: { name: string; sessions: number }[]
-  kinds: { kind: string; sessions: number }[]
+  filling: { id: string; title: string; starts_at: string; room: string; going: number }[]
+  my_day: { hours: number; goal_hours: number; sessions: number; meetings: number; requests: number }
   people: {
-    countries: { name: string; attendees: number }[]
-    companies: { name: string; speakers: number }[]
+    total: number
+    speakers: number
+    attendees: number
+    sample: number
+    countries: Named[]
+    schools: Named[]
+    companies: Named[]
+    interests: Named[]
   }
-}
-
-// Fixed order, fixed colour: a group keeps its colour whatever the day shows.
-export const GROUPS: { id: Group; label: string; color: string }[] = [
-  { id: 'talks', label: 'Talks', color: 'var(--chart-1)' },
-  { id: 'keynotes', label: 'Keynotes', color: 'var(--chart-2)' },
-  { id: 'colocated', label: 'Co-located', color: 'var(--chart-3)' },
-  { id: 'breaks', label: 'Breaks and food', color: 'var(--chart-4)' },
-  { id: 'other', label: 'Other', color: 'var(--chart-5)' },
-]
-
-const GROUP_OF_KIND: Record<string, Group> = {
-  talk: 'talks',
-  lightning: 'talks',
-  tutorial: 'talks',
-  contribfest: 'talks',
-  keynote: 'keynotes',
-  colocated: 'colocated',
-  break: 'breaks',
-}
-
-export function groupOf(kind: string): (typeof GROUPS)[number] {
-  const id = GROUP_OF_KIND[kind] ?? 'other'
-  return GROUPS.find((g) => g.id === id) ?? GROUPS[GROUPS.length - 1]
+  activity: {
+    total: number
+    sample: number
+    kinds: { kind: string; count: number }[]
+    buckets: { start: string; count: number }[]
+    searches: Named[]
+  }
 }
 
 /** "2026-11-09T08:40:00" -> "08:40" (schedule times are local and carry no offset). */
@@ -62,12 +40,25 @@ export const minutesOf = (iso: string) => Number(iso.slice(11, 13)) * 60 + Numbe
 export const hhmmFromMinutes = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
 
-/** "2026-11-09" -> "Mon 9 Nov". Noon avoids any date shift from the browser's own time zone. */
+/** 480 -> "8a", 720 -> "12p": compact hour labels for a time axis. */
+export function hourShort(m: number): string {
+  const h = Math.floor(m / 60)
+  return `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`
+}
+
+/** "2026-11-09" -> "Mon 9" or "Monday, Nov 9". Noon avoids any date shift from the browser's own time zone. */
 export function dayLabel(day: string, style: 'short' | 'long' = 'short'): string {
   const d = new Date(`${day}T12:00:00`)
-  const weekday = d.toLocaleDateString('en-US', { weekday: style === 'long' ? 'long' : 'short' })
-  const month = d.toLocaleDateString('en-US', { month: 'short' })
-  return style === 'long' ? `${weekday} ${d.getDate()} ${month}` : `${weekday} ${d.getDate()}`
+  if (style === 'long') {
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+  }
+  return `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}`
 }
 
 export const fmt = (n: number) => n.toLocaleString('en-US')
+
+/** 1 -> "1 session", 2 -> "2 sessions". */
+export const plural = (n: number, one: string, many = `${one}s`) => `${fmt(n)} ${n === 1 ? one : many}`
+
+/** Hours with at most one decimal: 8.5 -> "8.5", 8 -> "8", 8.25 -> "8.3". */
+export const hours = (h: number) => (Number.isInteger(h) ? String(h) : h.toFixed(1))
