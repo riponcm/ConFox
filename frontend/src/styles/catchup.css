@@ -1,5 +1,5 @@
 /* Catch up: reading comfort first (larger type, generous line height, short lines). Tokens from index.css only. */
-.catchup-page { max-width: 720px; }
+.catchup-page { max-width: 1100px; } /* reading text keeps its own 65ch measure below */
 .catchup-note { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
 
 .catchup-sample {

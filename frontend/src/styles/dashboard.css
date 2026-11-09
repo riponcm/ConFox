@@ -1,6 +1,6 @@
 /* Dashboard: the conference pulse. Colours come from the tokens in index.css only. */
 
-.page.dashboard { max-width: 1080px; }
+.page.dashboard { max-width: 1320px; }
 
 .dash-sr-only {
   position: absolute;
@@ -44,7 +44,7 @@
   cursor: pointer;
 }
 .dash-day:hover { background: var(--panel-2); color: var(--text); }
-.dash-day[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.dash-day[aria-pressed="true"] { background: var(--accent-fill); color: var(--on-accent); }
 .dash-day:disabled { cursor: progress; }
 
 .dash-loading { color: var(--muted); }
@@ -209,3 +209,22 @@
 @media (prefers-reduced-motion: reduce) {
   .dash-body { transition: none; }
 }
+
+/* Personal hero row: next coffee, happening, your next */
+.dash-hero-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
+.dash-hero, .dash-tile { min-width: 0; margin: 0; padding: 16px 18px; border-radius: var(--radius); }
+.dash-hero { background: var(--hero); color: var(--on-accent); box-shadow: var(--shadow); }
+.dash-tile { background: var(--panel); border: 1px solid var(--line); }
+.dash-hero-label, .dash-tile-label {
+  display: flex; align-items: center; gap: 6px; margin: 0 0 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.dash-tile-label { color: var(--muted); }
+.dash-hero-big, .dash-tile-big { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.dash-hero-num { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin-right: 2px; }
+.dash-hero-what { font-weight: 500; }
+.dash-tile-title { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.dash-hero-sub, .dash-tile-sub { margin: 6px 0 0; font-size: 12.5px; }
+.dash-hero-sub { color: var(--on-accent); opacity: 0.9; }
+.dash-tile-sub { color: var(--muted); }
+@media (max-width: 900px) { .dash-hero-row { grid-template-columns: minmax(0, 1fr); } }

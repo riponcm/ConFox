@@ -1,7 +1,11 @@
 /* Schedule page. Colours come only from the tokens in index.css. */
 
-.sch-page { display: flex; flex-direction: column; gap: 14px; }
+.sch-page { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.sch-page > * { flex: 1 1 100%; min-width: 0; }
 .sch-page h1 { margin: 0; }
+/* Search and day pills share one row on wide screens, like a toolbar. */
+.sch-page > .sch-search { flex: 1 1 360px; }
+.sch-page > .sch-days { flex: 0 1 auto; }
 .sch-muted { color: var(--muted); }
 .sch-note { margin: 0; color: var(--muted); font-size: 13px; }
 .sch-empty { margin: 8px 0 0; color: var(--muted); }
@@ -27,25 +31,26 @@
 
 /* Day tabs */
 .sch-days { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.sch-days { padding: 3px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); }
 .sch-day-tab {
   flex: 1 0 auto;
   display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  min-width: 64px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 56px;
   padding: 7px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
   color: var(--text-2);
   font-weight: 600;
   cursor: pointer;
 }
 .sch-day-tab:hover { background: var(--panel-2); color: var(--text); }
-.sch-day-tab[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.sch-day-tab[aria-pressed="true"] { background: var(--accent-fill); color: var(--on-accent); }
 .sch-today { font-size: 10.5px; font-weight: 500; color: var(--muted); }
-.sch-day-tab[aria-pressed="true"] .sch-today { color: var(--accent-ink); }
+.sch-day-tab[aria-pressed="true"] .sch-today { color: var(--on-accent); opacity: 0.85; }
 
 /* For you / Everything */
 .sch-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
@@ -59,7 +64,7 @@
   font-weight: 500;
   cursor: pointer;
 }
-.sch-toggle button[aria-pressed="true"] { background: var(--panel-3); color: var(--text); }
+.sch-toggle button[aria-pressed="true"] { background: var(--accent-fill); color: var(--on-accent); font-weight: 600; }
 .sch-count { margin: 0; color: var(--text-2); font-size: 13px; }
 
 /* Day view */
@@ -71,6 +76,7 @@
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
 .sch-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -88,7 +94,7 @@
 .sch-row.is-agenda { border-left-color: var(--accent); }
 .sch-row.is-muted { background: transparent; }
 .sch-row.is-muted .sch-title { color: var(--text-2); font-weight: 500; }
-.sch-time { color: var(--text-2); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 1px; }
+.sch-time { color: var(--accent-ink); font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 1px; }
 .sch-time-day { display: block; color: var(--muted); font-size: 11px; }
 .sch-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .sch-title {
@@ -156,7 +162,7 @@
   font-size: 12px;
   cursor: pointer;
 }
-.sch-facet.is-active { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+.sch-facet.is-active { background: var(--accent-fill); color: var(--on-accent); border-color: var(--accent-fill); }
 
 /* Phone: time sits above the title so the title gets the full width. */
 @media (max-width: 479px) {
