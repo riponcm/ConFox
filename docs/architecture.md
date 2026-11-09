@@ -184,6 +184,35 @@ Clashes list confirmed agenda items that overlap a session. A full-day co-locate
 
 The page (`src/pages/Schedule.tsx`, `src/components/schedule/`) has day tabs from Monday, a debounced search box over `GET /api/search` (results replace the day view and show the search mode and time; if search is missing it says so and keeps the day view), a For you / Everything toggle with a count, time blocks where runs of other sessions fold into "N more sessions", meetings and pending requests in their slot, and a "now" line from `/api/meta`. Times are read from the strings, never converted through the browser's time zone.
 
+## Agenda and Meet (pull request 7 and 11)
+
+Personal items live in `confox-agenda`, one document each; the shape and the pure rules are in `backend/app/agenda_store.py`, shared by `routers/agenda.py` and `routers/connect.py`. My brief reads the same documents.
+
+| Field | Meaning |
+|---|---|
+| `kind`, `status` | `session` or `meeting`; `confirmed`, `pending` or `declined` |
+| `direction` | Meetings only: `incoming` or `outgoing`. A pending meeting without one is incoming (the seeded lunch request) |
+| `session_id` | Sessions: the session. Meetings: the food or coffee break used as the slot (absent on seeded meetings) |
+| `with_id`, `with_name`, `message` | Meetings: the other person and the optional line (at most 200 characters) |
+| `title`, `starts_at`, `ends_at`, `room` | Copied from the session or break when the item is written, so reads need no join |
+| `sample`, `created_at` | `true` only for seeded items; local time of the write |
+
+Ids: `{user}-s-{session_id}` for added sessions, `{user}-m-{8 hex}` for new requests; seeded items keep theirs.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/agenda?user_id&day` | `{items: confirmed sessions and meetings by start, pending: pending meetings}` |
+| `POST /api/agenda {user_id, session_id}` | The session item. Idempotent (an existing entry, seeded ones included, is returned); breaks and registration are refused (422) |
+| `DELETE /api/agenda/{session_id}?user_id` | `{session_id, deleted}`; removes every session entry of the user for it by query, 404 if none |
+| `GET /api/connect/slots?user_id&with_id` | `{slots: [{session_id, title, starts_at, ends_at, room, day}]}`, at most 3 |
+| `POST /api/connect {user_id, with_id, session_id, message}` | The new pending outgoing meeting; 409 when a pending or confirmed meeting with that person overlaps the slot |
+| `GET /api/connect?user_id` | `{incoming, outgoing, meetings}`: pending to the user, pending from the user, confirmed |
+| `POST /api/connect/{id}/accept`, `/decline` | The item with status `confirmed` or `declined`; only for a pending incoming request (409 otherwise, 404 if not the user's) |
+
+- **Free slots.** Food and coffee breaks (`is_food`) from `clock.now()` on, today first, then the next day that has breaks. A break is taken when it overlaps a confirmed item of the user (a co-located full day is ignored, as in Schedule) or a pending or confirmed meeting with the same person. Pending requests with other people do not block. The meeting title comes from the break ("Lunch \| On Own" becomes "Lunch").
+- **Writes.** Every write refreshes the agenda index so the next read sees it. Counters: `confox.agenda.changes` (attribute `action`: add, remove) and `confox.connect.requests` (`action`: send, accept, decline); the request spans carry the session or person id.
+- **Schedule.** Each day-view row except breaks and registration has an "Agenda" / "Added" toggle; it writes, then reloads the day and the agenda ids, so For you, clashes and the count update together. Search results get the same toggle through the `SessionCard` aside, with state from `GET /api/agenda`. Outgoing requests show as "Request sent".
+- **People.** Every card has a primary "Meet" button that opens an inline panel: the free slots as a native radio group (first one chosen and focused), an optional line, "Send request". After sending, the card says "Request sent for 14:48 · Coffee" and the button becomes a disabled "Requested" (warn colours, since it is pending); people with a pending outgoing request show "Requested" on load, and a confirmed meeting shows as a green chip. Escape closes the panel and returns focus to the button.
 ## My brief (pull request 10)
 
 One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (day of `clock.now()`) lives in `backend/app/routers/brief.py`; the page is `src/pages/Brief.tsx` with `src/components/brief/` and `src/styles/brief.css`. Nothing new is stored: the endpoint reads `confox-sessions`, `confox-people` and `confox-agenda` and reuses the other features' helpers (schedule `_day_sessions`, `annotate`, `_knn`; Match `build_match_query`, `why`; `next_food()`).

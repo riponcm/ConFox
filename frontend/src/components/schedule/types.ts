@@ -30,7 +30,9 @@ export type ScheduleSession = {
 export type AgendaItem = {
   id: string
   kind: 'session' | 'meeting'
-  status: 'confirmed' | 'pending'
+  status: 'confirmed' | 'pending' | 'declined'
+  /** Meetings only; a pending meeting without one is a request someone sent the user. */
+  direction?: 'incoming' | 'outgoing'
   title: string
   starts_at: string
   ends_at: string
@@ -47,6 +49,9 @@ export type DayResponse = {
   pending: AgendaItem[]
   semantic: boolean
 }
+
+/** GET /api/agenda */
+export type AgendaResponse = { items: AgendaItem[]; pending: AgendaItem[] }
 
 export type DaysResponse = { days: { day: string; count: number }[] }
 

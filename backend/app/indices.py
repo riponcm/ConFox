@@ -71,6 +71,11 @@ MAPPINGS: dict[str, dict] = {
             "ends_at": LOCAL_TIME,
             "room": {"type": "keyword"},
             "sample": {"type": "boolean"},
+            # Meet: who asked (meetings only; a pending meeting without it is incoming), the note sent with it.
+            "direction": {"type": "keyword"},
+            "message": {"type": "text"},
+            "request_id": {"type": "keyword"},
+            "created_at": LOCAL_TIME,
         }
     },
     # Sample keynote transcripts in ~200-word chunks (doc_type "chunk"), plus one cached Claude summary per talk

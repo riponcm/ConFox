@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 import { LoaderCircle, Search, X } from 'lucide-react'
-import { ApiError, getJSON } from '../api.ts'
+import { ApiError, deleteJSON, getJSON, postJSON } from '../api.ts'
 import DayView from '../components/schedule/DayView.tsx'
 import SearchResults from '../components/schedule/SearchResults.tsx'
 import { dayLabel } from '../components/schedule/time.ts'
-import type { DayResponse, DaysResponse, Meta, SearchResponse } from '../components/schedule/types.ts'
+import type { ToggleAgenda } from '../components/schedule/agenda.ts'
+import type {
+  AgendaResponse,
+  DayResponse,
+  DaysResponse,
+  Meta,
+  SearchResponse,
+} from '../components/schedule/types.ts'
 import '../styles/schedule.css'
 
 // Sunday holds registration and one pre-event; the guide's days start Monday.
@@ -16,6 +23,11 @@ const DEBOUNCE_MS = 300
 type Answer<T> = { key: string; data?: T; failed?: boolean }
 type Load<T> = { status: 'loading' | 'error' | 'empty' } | { status: 'ready'; data: T }
 type SearchState = { status: 'idle' | 'loading' | 'unavailable' } | { status: 'ready'; data: SearchResponse }
+
+async function loadAgendaIds(userId: string, signal?: AbortSignal): Promise<Set<string>> {
+  const agenda = await getJSON<AgendaResponse>('agenda', { user_id: userId }, { signal })
+  return new Set(agenda.items.flatMap((i) => (i.kind === 'session' && i.session_id ? [i.session_id] : [])))
+}
 
 export default function Schedule() {
   const [meta, setMeta] = useState<Meta | null>(null)
@@ -29,6 +41,9 @@ export default function Schedule() {
   const [debounced, setDebounced] = useState('')
   const [searchAnswer, setSearchAnswer] = useState<Answer<SearchResponse> | null>(null)
   const searchKey = `${debounced}|${day ?? ''}`
+  // Session ids on the agenda, for search results (the day view gets `on_agenda` from the API).
+  const [agendaIds, setAgendaIds] = useState<Set<string>>(new Set())
+  const [agendaFailed, setAgendaFailed] = useState(false)
 
   // Who and when, plus the day tabs. Default to today if the conference is on.
   useEffect(() => {
@@ -57,6 +72,40 @@ export default function Schedule() {
       .catch(() => !ctrl.signal.aborted && setDayAnswer({ key: day, failed: true }))
     return () => ctrl.abort()
   }, [day, meta])
+
+  useEffect(() => {
+    if (!meta) return
+    const ctrl = new AbortController()
+    loadAgendaIds(meta.user_id, ctrl.signal)
+      .then(setAgendaIds)
+      .catch(() => !ctrl.signal.aborted && setAgendaIds(new Set()))
+    return () => ctrl.abort()
+  }, [meta])
+
+  // Add or remove, then reload the day and the agenda ids so For you, clashes and the buttons agree.
+  const toggleAgenda: ToggleAgenda = async (sessionId, on) => {
+    if (!meta) return
+    const user_id = meta.user_id
+    try {
+      if (on) await deleteJSON(`agenda/${encodeURIComponent(sessionId)}`, { user_id })
+      else await postJSON('agenda', { user_id, session_id: sessionId })
+      setAgendaFailed(false)
+    } catch (err) {
+      // A 404 on remove means it was already gone; the reload below shows the truth either way.
+      if (!(err instanceof ApiError && err.status === 404)) {
+        console.warn('agenda change failed', err)
+        setAgendaFailed(true)
+      }
+    }
+    const shown = day
+    const [ids, data] = await Promise.all([
+      loadAgendaIds(user_id).catch(() => null),
+      shown ? getJSON<DayResponse>('schedule/day', { day: shown, user_id }).catch(() => null) : null,
+    ])
+    if (ids) setAgendaIds(ids)
+    // Only replace the answer for the day it belongs to; a day switch in the meantime has its own request.
+    if (data && shown) setDayAnswer((prev) => (prev?.key === shown ? { key: shown, data } : prev))
+  }
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS)
@@ -119,6 +168,11 @@ export default function Schedule() {
         )}
       </div>
       {search.status === 'unavailable' && <p className="sch-note">Search is not available yet</p>}
+      {agendaFailed && (
+        <p className="sch-note sch-agenda-error" role="alert">
+          Could not change your agenda. Try again.
+        </p>
+      )}
 
       {days.length > 0 && (
         <div className="sch-days" aria-label="Day">
@@ -139,7 +193,13 @@ export default function Schedule() {
 
       {showResults ? (
         search.status === 'ready' ? (
-          <SearchResults data={search.data} day={day ?? ''} onPickDay={setDay} />
+          <SearchResults
+            data={search.data}
+            day={day ?? ''}
+            onPickDay={setDay}
+            agendaIds={agendaIds}
+            onToggleAgenda={meta ? toggleAgenda : undefined}
+          />
         ) : (
           <p className="sch-note sch-searching" role="status">
             <LoaderCircle size={14} className="sch-spin" aria-hidden="true" />
@@ -170,7 +230,7 @@ export default function Schedule() {
           {view.status === 'empty' && (
             <p className="sch-note">No schedule is loaded yet. Run the data loader (see the README) and reload.</p>
           )}
-          {view.status === 'ready' && <DayView data={view.data} forYouOnly={forYouOnly} />}
+          {view.status === 'ready' && <DayView data={view.data} forYouOnly={forYouOnly} onToggleAgenda={toggleAgenda} />}
           {view.status === 'ready' && (view.data.meetings.length > 0 || view.data.pending.length > 0) && (
             <p className="sample-note">Meetings and agenda items are generated sample data.</p>
           )}

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { LoaderCircle, Search, SearchX, X } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
+import type { ConnectResponse, Meeting } from '../components/connect/types.ts'
 import MatchFilters from '../components/people/MatchFilters.tsx'
 import PersonCard from '../components/people/PersonCard.tsx'
 import { WHY_FILTER } from '../components/people/fields.ts'
 import type { FilterKey, Filters, Kind, MatchResponse, Why } from '../components/people/types.ts'
 import '../styles/people.css'
+import '../styles/connect.css'
 
 const KINDS: { value: Kind; label: string }[] = [
   { value: 'attendee', label: 'Attendees' },
@@ -14,8 +16,9 @@ const KINDS: { value: Kind; label: string }[] = [
 
 export default function People() {
   const [kind, setKind] = useState<Kind>('attendee')
-  const [text, setText] = useState('')
-  const [q, setQ] = useState('')
+  // My brief links here with ?q=<name> to open one person.
+  const [text, setText] = useState(() => new URLSearchParams(window.location.search).get('q') ?? '')
+  const [q, setQ] = useState(text)
   const [filters, setFilters] = useState<Filters>({})
   // The last response stays on screen while the next one loads, so cards and chips do not flicker.
   // `key` says which request it answered; loading is simply "the current request has not answered yet".
@@ -24,6 +27,9 @@ export default function People() {
     data: null,
     failed: false,
   })
+  // Meet: who the user already asked (pending) and who they are meeting (confirmed), by person id.
+  const [requested, setRequested] = useState<Map<string, Meeting>>(new Map())
+  const [meetings, setMeetings] = useState<Map<string, Meeting>>(new Map())
   const params = { user_id: DEMO_USER, kind, q, size: 30, ...filters }
   const key = JSON.stringify(params)
   const { data, failed } = res
@@ -45,6 +51,25 @@ export default function People() {
       })
     return () => ctrl.abort()
   }, [key])
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    getJSON<ConnectResponse>('connect', { user_id: DEMO_USER }, { signal: ctrl.signal })
+      .then((c) => {
+        setRequested(new Map(c.outgoing.map((m) => [m.with_id, m])))
+        setMeetings(new Map(c.meetings.map((m) => [m.with_id, m])))
+      })
+      .catch((err: unknown) => !ctrl.signal.aborted && console.warn('connections failed', err))
+    return () => ctrl.abort()
+  }, [])
+
+  const addRequested = (m: Meeting) => setRequested((prev) => new Map(prev).set(m.with_id, m))
+  const removeRequested = (personId: string) =>
+    setRequested((prev) => {
+      const next = new Map(prev)
+      next.delete(personId)
+      return next
+    })
 
   const toggle = (key: FilterKey, value: string) =>
     setFilters((f) => {
@@ -151,7 +176,15 @@ export default function People() {
           <ol className={loading ? 'people-list is-stale' : 'people-list'}>
             {results.map((p) => (
               <li key={p.id}>
-                <PersonCard person={p} onWhy={applyWhy} />
+                <PersonCard
+                  person={p}
+                  onWhy={applyWhy}
+                  userId={DEMO_USER}
+                  request={requested.get(p.id)}
+                  meeting={meetings.get(p.id)}
+                  onRequested={addRequested}
+                  onWithdrawn={removeRequested}
+                />
               </li>
             ))}
           </ol>

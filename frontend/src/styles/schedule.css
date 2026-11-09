@@ -83,7 +83,7 @@
 
 .sch-row {
   display: grid;
-  grid-template-columns: 6.2rem minmax(0, 1fr);
+  grid-template-columns: 6.2rem minmax(0, 1fr) auto;
   gap: 4px 12px;
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -164,9 +164,34 @@
 }
 .sch-facet.is-active { background: var(--accent-fill); color: var(--on-accent); border-color: var(--accent-fill); }
 
-/* Phone: time sits above the title so the title gets the full width. */
+/* Add to agenda: outlined when off, filled accent when on. */
+.sch-action { align-self: start; }
+.agenda-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.agenda-btn:hover { border-color: var(--accent); color: var(--text); }
+.agenda-btn.is-on { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--on-accent); }
+.agenda-btn.is-on:hover { background: var(--accent-fill-hover); }
+.agenda-btn:disabled { opacity: 0.6; cursor: progress; }
+.sch-result-aside { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.sch-agenda-error { color: var(--danger); }
+
+/* Phone: time sits above the title so the title gets the full width; the agenda button goes below. */
 @media (max-width: 479px) {
   .sch-row { grid-template-columns: minmax(0, 1fr); padding: 9px 10px; }
+  .sch-action { justify-self: start; }
   .sch-time-day { display: inline; margin-right: 6px; }
   .sch-day-tab { min-width: 0; padding: 6px 8px; }
 }

@@ -1,10 +1,12 @@
 import { CalendarCheck, Clock, TriangleAlert, Users } from 'lucide-react'
+import AgendaButton from './AgendaButton.tsx'
+import { canAdd, type ToggleAgenda } from './agenda.ts'
 import { kindLabel, roomLabel, timeRange } from './time.ts'
 import type { AgendaItem, ScheduleSession } from './types.ts'
 
-type Props = { session: ScheduleSession; muted?: boolean; showDay?: string }
+type Props = { session: ScheduleSession; muted?: boolean; showDay?: string; onToggleAgenda?: ToggleAgenda }
 
-export function ScheduleRow({ session: s, muted = false, showDay }: Props) {
+export function ScheduleRow({ session: s, muted = false, showDay, onToggleAgenda }: Props) {
   const room = roomLabel(s.room)
   const why = s.why ?? []
   const clashes = s.clashes ?? []
@@ -38,12 +40,18 @@ export function ScheduleRow({ session: s, muted = false, showDay }: Props) {
           </p>
         )}
       </div>
+      {onToggleAgenda && canAdd(s) && (
+        <div className="sch-action">
+          <AgendaButton title={s.title} on={!!s.on_agenda} onToggle={() => onToggleAgenda(s.id, !!s.on_agenda)} />
+        </div>
+      )}
     </li>
   )
 }
 
 export function MeetingRow({ item }: { item: AgendaItem }) {
   const pending = item.status === 'pending'
+  const outgoing = pending && item.direction === 'outgoing'
   const title = item.with_name ? `${item.title} with ${item.with_name}` : item.title
   const room = roomLabel(item.room)
   return (
@@ -59,7 +67,7 @@ export function MeetingRow({ item }: { item: AgendaItem }) {
           {title}
         </p>
         <p className="sch-meta">
-          <span>{pending ? 'Meeting request' : 'Meeting'}</span>
+          <span>{outgoing ? 'Request sent' : pending ? 'Meeting request' : 'Meeting'}</span>
           {room && <span>{room}</span>}
           {!room && pending && <span>Place not set</span>}
         </p>
