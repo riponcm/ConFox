@@ -69,6 +69,21 @@ MAPPINGS: dict[str, dict] = {
             "sample": {"type": "boolean"},
         }
     },
+    # Sample keynote transcripts in ~200-word chunks (doc_type "chunk"), plus one cached Claude summary per talk
+    # (doc_type "summary", id "summary-<session_id>"). Rebuilding this index only clears the cached summaries.
+    settings.idx_transcripts: {
+        "properties": {
+            "doc_type": {"type": "keyword"},
+            "session_id": {"type": "keyword"},
+            "chunk": {"type": "integer"},
+            "text": {"type": "text"},
+            "sample": {"type": "boolean"},
+            "tldr": {"type": "text"},
+            "takeaways": {"type": "text"},
+            "model": {"type": "keyword"},
+            "created_at": LOCAL_TIME,
+        }
+    },
 }
 
 

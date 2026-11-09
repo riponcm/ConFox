@@ -37,7 +37,7 @@ These are created by the app's own loaders in later pull requests and are fictio
 |---|---|---|
 | Sample attendees | Real attendee profiles are private; Emma and about 80 fictional attendees stand in (University of Utah first) | Pull request 2 |
 | Sample agenda and meetings | Emma's Monday for the demo: a co-located AI day, a coffee, a pending lunch request | Pull request 2 |
-| Sample talk transcripts | Recordings are not public yet; three keynote transcripts written as samples for Catch up | Pull request 9 |
+| Sample talk transcripts (`sample/transcripts.json`) | Recordings are not public yet. Three Tuesday 10 November keynotes (sessions 1301696, 1349401, 1301749); Claude (`claude-opus-5-5`) wrote about 1300 words for each from the keynote's public title, speakers and description only, on 2026-11-09. Generated once with `uv run python -m app.data.transcripts --generate`; `--load` indexes it without calling Claude | Pull request 9 |
 | Embeddings | Vectors computed from the text above for hybrid search and matching | Pull requests 2, 3 |
 
 ## Rules
