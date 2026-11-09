@@ -65,6 +65,7 @@ Implementation is described in the docs as each piece lands; every feature is a 
 | [Plan](docs/plan.md) | Build order, one pull request per feature, cut line |
 | [Architecture](docs/architecture.md) | Components and data flow (filled in as we build) |
 | [Research](docs/research.md) | Notes gathered before the event: data, search, observability |
+| [Team tasks](docs/tasks/README.md) | Small, self-contained tasks with briefs for each team member |
 | [Data](data/README.md) | What we collected, when, from where, and what is generated |
 
 ## Run locally
