@@ -184,6 +184,22 @@ Clashes list confirmed agenda items that overlap a session. A full-day co-locate
 
 The page (`src/pages/Schedule.tsx`, `src/components/schedule/`) has day tabs from Monday, a debounced search box over `GET /api/search` (results replace the day view and show the search mode and time; if search is missing it says so and keeps the day view), a For you / Everything toggle with a count, time blocks where runs of other sessions fold into "N more sessions", meetings and pending requests in their slot, and a "now" line from `/api/meta`. Times are read from the strings, never converted through the browser's time zone.
 
+## My brief (pull request 10)
+
+One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (day of `clock.now()`) lives in `backend/app/routers/brief.py`; the page is `src/pages/Brief.tsx` with `src/components/brief/` and `src/styles/brief.css`. Nothing new is stored: the endpoint reads `confox-sessions`, `confox-people` and `confox-agenda` and reuses the other features' helpers (schedule `_day_sessions`, `annotate`, `_knn`; Match `build_match_query`, `why`; `next_food()`).
+
+| Part | Rule |
+|---|---|
+| `timeline` | Today's confirmed agenda sessions and meetings plus the day's food breaks, by start. A break that starts with a confirmed meeting is left out (the coffee with Alice is that break). Co-located sessions carry `all_day` and a short title ("Cloud Native AI + Inference Day"; `full_title` keeps the original) |
+| `is_next` | The first item not yet ended; a co-located day already under way is skipped while something else is still to come, so the marker moves to the coffee, then lunch |
+| `gaps` | Free windows of 60+ minutes between 08:00 and 19:00, from now on; all-day co-located events do not block (they would hide every gap) |
+| `requests` | Pending meetings today split into `incoming` (no direction counts as incoming) and `outgoing`; a request without a room takes the room of the food break at the same time |
+| `people` | The Match ranking (same query, vector when present, lexical fallback logged on the span), minus anyone the user already has a meeting, request or declined request with today; up to 3, each with the first `why` reason and `free_at`: the first food break after now that does not overlap the user's confirmed plans |
+| `suggested` | Up to 3 for-you sessions (interest phrase or kNN) not on the agenda, not started, not clashing; other co-located days and breaks left out |
+| `summary` | Plain sentences from the data, no LLM: the anchor event, confirmed meetings, waiting requests |
+
+The page shows the date and summary, "People today" (confirmed meetings, incoming requests with Accept and Decline, suggested people linking to `/people?q=`), the "Your day" timeline (dashed free rows link to `/schedule`) and "Suggested for you" as `SessionCard`s. Accept and Decline call `POST /api/connect/{id}/accept|decline` from the connect pull request and refresh; on a 404 the card says "Not available yet". The request span carries `confox.brief.timeline`, `confox.brief.requests_incoming`, `confox.brief.people` and `confox.brief.suggested`. Agenda items and people are labelled as generated sample data.
+
 ## Key decisions
 
 | Decision | Why |
