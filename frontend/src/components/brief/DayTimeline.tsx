@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { CalendarRange, Coffee, MapPin, UtensilsCrossed } from 'lucide-react'
 import { hhmm, minutes, roomLabel, timeRange } from '../schedule/time.ts'
+import SessionLink from '../session/SessionLink.tsx'
 import { initials, mealWord } from './types.ts'
 import type { Gap, TimelineItem } from './types.ts'
 
@@ -58,7 +59,7 @@ function ItemCard({ item }: { item: TimelineItem }) {
       <div className="brief-tl-card brief-tl-food">
         <div className="brief-tl-row">
           <Icon size={16} aria-hidden="true" className="brief-tl-icon" />
-          <h3>{item.title}</h3>
+          <h3>{item.session_id ? <SessionLink id={item.session_id}>{item.title}</SessionLink> : item.title}</h3>
           {next}
         </div>
         <p className="brief-tl-sub">
@@ -73,7 +74,9 @@ function ItemCard({ item }: { item: TimelineItem }) {
   return (
     <div className="brief-tl-card brief-tl-session">
       <div className="brief-tl-row">
-        <h3 title={item.full_title || item.title}>{item.title}</h3>
+        <h3 title={item.full_title || item.title}>
+          {item.session_id ? <SessionLink id={item.session_id}>{item.title}</SessionLink> : item.title}
+        </h3>
         {next}
       </div>
       <p className="brief-tl-sub">

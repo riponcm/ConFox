@@ -169,7 +169,7 @@ export default function Dashboard() {
                 unit="going"
                 suffix="going"
                 empty="Nothing left to start on this day."
-                items={data.filling.map((s) => ({ name: s.title, value: s.going, time: s.starts_at }))}
+                items={data.filling.map((s) => ({ name: s.title, value: s.going, time: s.starts_at, sessionId: s.id }))}
               />
             </Card>
 

@@ -1,0 +1,175 @@
+/* Session details: the drawer and the clickable titles that open it. Colours from index.css tokens only.
+   The drawer reuses the Schedule's kind icon, chips and Agenda button, so it loads schedule.css too. */
+
+/* A title that opens the drawer: reads as text, shows it is clickable on hover and focus. */
+.session-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.session-link:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+/* The drawer: wider than the profile drawer, full screen on a phone. Percentages, not vw: 100vw includes the
+   page scrollbar, which would push the drawer's left edge off screen. */
+.session-drawer { width: min(520px, 100%); max-width: 100%; }
+.session-drawer[open] { display: flex; }
+.sd-body { flex: 1; display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 0 20px 28px; overflow-y: auto; }
+.sd-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -20px;
+  padding: 12px 12px 10px 20px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+.sd-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--accent-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.sd-back:hover { background: var(--panel); }
+.sd-content { display: flex; flex-direction: column; gap: 18px; min-width: 0; transition: opacity 120ms; }
+.sd-content.is-loading { opacity: 0.55; }
+.sd-note { margin: 0; color: var(--muted); }
+.sd-warn { color: var(--warn); }
+.sd-muted { color: var(--muted); }
+.sd-small { margin: 0; font-size: 12.5px; }
+.sd-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sd-hero { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sd-kind { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--accent-ink); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.sd-kind .sch-kind { margin-top: 0; }
+.sd-title { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 700; overflow-wrap: anywhere; }
+.sd-title:focus { outline: none; }
+.sd-title:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sd-fact { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--text-2); min-width: 0; }
+.sd-fact svg { flex: none; margin-top: 3px; color: var(--muted); }
+.sd-fact > span { min-width: 0; overflow-wrap: anywhere; }
+.sd-chips { gap: 6px; }
+.sd-chips .chip { max-width: 100%; overflow-wrap: anywhere; }
+.chip.chip-similar { background: var(--ok-soft); color: var(--ok); }
+
+.sd-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sd-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.sd-action-link:hover { background: var(--panel-2); }
+.sd-clash {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 500;
+}
+.sd-clash svg { flex: none; margin-top: 3px; }
+
+.sd-section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sd-section .section-label { margin: 0; }
+.sd-going { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--text-2); }
+.sd-going svg { flex: none; margin-top: 3px; color: var(--muted); }
+.sd-section .sample-note { margin: 0; }
+.sd-description { margin: 0; color: var(--text-2); line-height: 1.65; white-space: pre-line; overflow-wrap: anywhere; }
+.sd-more {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.sd-more:hover { text-decoration: underline; }
+
+.sd-speakers { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.sd-speaker {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  min-width: 0;
+}
+.sd-avatar { width: 38px; height: 38px; font-size: 14px; }
+.sd-speaker-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.sd-speaker-name { margin: 0; font-weight: 600; }
+.sd-speaker-role { margin: 0; color: var(--text-2); font-size: 13px; overflow-wrap: anywhere; }
+.sd-speaker-bio {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+.sd-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 2px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.sd-links a { display: inline-flex; align-items: center; gap: 4px; }
+.sd-also { margin-top: 6px; }
+.sd-also-label { margin: 0 0 4px; color: var(--muted); font-size: 12px; }
+
+.sd-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sd-list-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+}
+.sd-list-btn:hover { background: var(--panel-2); }
+.sd-list-btn .sch-kind { margin-top: 3px; }
+.sd-list-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.sd-list-title { font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.sd-list-meta { display: flex; flex-wrap: wrap; gap: 0 8px; color: var(--muted); font-size: 12px; }
+.sd-list-meta > span + span::before { content: "\00b7"; margin-right: 8px; }
+.sd-list-added { flex: none; padding: 1px 8px; font-size: 11.5px; gap: 4px; }
+
+@media (max-width: 767px) {
+  .session-drawer { width: 100%; }
+  .sd-body { padding: 0 16px calc(24px + env(safe-area-inset-bottom)); }
+  .sd-head { margin: 0 -16px; padding-left: 16px; }
+  .sd-title { font-size: 18px; }
+}

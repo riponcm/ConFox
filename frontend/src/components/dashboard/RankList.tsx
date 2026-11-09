@@ -1,3 +1,4 @@
+import SessionLink from '../session/SessionLink.tsx'
 import { fmt, hhmm } from './types.ts'
 
 export type RankItem = {
@@ -7,6 +8,8 @@ export type RankItem = {
   time?: string
   /** A pinned row leads the list whatever its value (the host university). */
   tag?: string
+  /** When the row is a session, its name opens the session drawer. */
+  sessionId?: string
 }
 
 /**
@@ -38,7 +41,7 @@ export default function RankList({
                 <time dateTime={item.time}>{hhmm(item.time)}</time> &middot;{' '}
               </>
             )}
-            {item.name}
+            {item.sessionId ? <SessionLink id={item.sessionId}>{item.name}</SessionLink> : item.name}
             {item.tag && <span className="dash-rank-tag">{item.tag}</span>}
           </span>
           <span className="dash-rank-bar-row">

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useAgendaVersion } from '../components/session/context.ts'
 import { Link } from 'react-router'
 import { CalendarDays, ChevronDown, Coffee, FileText, Radio, Users } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
 import { hhmm, roomLabel, timeRange } from '../components/schedule/time.ts'
 import type { Session } from '../types.ts'
+import SessionLink from '../components/session/SessionLink.tsx'
 import '../styles/now.css'
 
 type Food = { session: Session; status: 'now' | 'next'; minutes: number }
@@ -126,7 +128,7 @@ function CompactList({ sessions, id }: { sessions: NowSession[]; id: string }) {
       {sessions.map((s) => (
         <li key={s.id}>
           <time dateTime={s.starts_at}>{timeRange(s.starts_at, s.ends_at)}</time>
-          <span className="now-compact-title">{s.short_title}</span>
+          <SessionLink id={s.id} className="now-compact-title">{s.short_title}</SessionLink>
           <span className="now-compact-meta">
             {joinDot([roomLabel(s.room), s.going ? `${s.going} going` : null])}
           </span>
@@ -159,7 +161,7 @@ function FeaturedCard({ s }: { s: Featured }) {
   return (
     <article className="now-feat">
       <div className="now-feat-top">
-        <h3 className="now-feat-title">{s.short_title}</h3>
+        <h3 className="now-feat-title"><SessionLink id={s.id}>{s.short_title}</SessionLink></h3>
         {why && <span className={s.on_agenda ? 'chip now-chip-mine' : 'chip'}>{why}</span>}
       </div>
       <p className="now-feat-meta">
@@ -231,11 +233,13 @@ export default function Now() {
   const [data, setData] = useState<NowResponse | null>(null)
   const [failed, setFailed] = useState(false)
 
+  const agendaVersion = useAgendaVersion()
+
   useEffect(() => {
     getJSON<NowResponse>('now', { user_id: DEMO_USER })
       .then(setData)
       .catch(() => setFailed(true))
-  }, [])
+  }, [agendaVersion]) // refetch when the session drawer changes the agenda
 
   return (
     <section className="page now" aria-labelledby="page-title">

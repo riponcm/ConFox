@@ -122,6 +122,15 @@ def sample_attendees(n: int = 80) -> list[dict]:
     return head + rest
 
 
+def speaker_links(speaker: dict) -> list[dict]:
+    """The speaker's published links (LinkedIn, blog, ...) as {title, url}; only http(s) URLs are kept."""
+    return [
+        {"title": (link.get("title") or link.get("linkType") or "Link").strip(), "url": link["url"]}
+        for link in speaker.get("links") or []
+        if str(link.get("url") or "").startswith(("https://", "http://"))
+    ]
+
+
 def speakers(raw: dict) -> list[dict]:
     """Public speaker profiles as published on the schedule. Not sample data."""
     questions = {q["id"]: q["question"] for q in raw["questions"]}
@@ -145,6 +154,7 @@ def speakers(raw: dict) -> list[dict]:
                 "interests_text": ", ".join(tracks),
                 "session_ids": [str(x) for x in s.get("sessions") or []],
                 "picture": s.get("profilePicture"),
+                "links": speaker_links(s),
             }
         )
     return out

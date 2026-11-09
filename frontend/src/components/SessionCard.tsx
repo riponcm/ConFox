@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Clock, MapPin, Users } from 'lucide-react'
 
 import type { Session, SessionKind } from '../types.ts'
+import SessionLink from './session/SessionLink.tsx'
 
 type Props = {
   session: Session
@@ -52,7 +53,10 @@ export default function SessionCard({ session, onSelect, aside }: Props) {
           <time dateTime={session.starts_at}>{timePart(session.starts_at)}–{timePart(session.ends_at)}</time>
           {session.minutes >= 60 && <span>· {session.minutes / 60 >= 2 ? `${Math.floor(session.minutes / 60)} h ${session.minutes % 60} min` : `${session.minutes} min`}</span>}
         </div>
-        <h2 className="session-card-title">{session.title}</h2>
+        <h2 className="session-card-title">
+          {/* A whole-card button cannot hold another button; otherwise the title opens the session drawer. */}
+          {onSelect ? session.title : <SessionLink id={session.id}>{session.title}</SessionLink>}
+        </h2>
         <span className={badgeClass}>{label}</span>
         <p className="session-card-detail">
           <MapPin size={15} aria-hidden="true" />

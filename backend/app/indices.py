@@ -55,6 +55,8 @@ MAPPINGS: dict[str, dict] = {
             "country": {"type": "keyword"},
             "session_ids": {"type": "keyword"},
             "picture": {"type": "keyword", "index": False},
+            # Speakers' published links, shown in session details; stored, never searched.
+            "links": {"type": "object", "enabled": False},
             "embedding": EMBEDDING,
         }
     },

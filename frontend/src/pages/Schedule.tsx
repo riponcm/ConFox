@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { ApiError, deleteJSON, getJSON, postJSON } from '../api.ts'
 import { useOpenProfile } from '../components/shellContext.ts'
+import { useAgendaVersion } from '../components/session/context.ts'
 import DayView from '../components/schedule/DayView.tsx'
 import FilterPanel from '../components/schedule/FilterPanel.tsx'
 import InterestChips from '../components/schedule/InterestChips.tsx'
@@ -47,10 +48,18 @@ async function loadAgendaIds(userId: string, signal?: AbortSignal): Promise<Set<
 export default function Schedule() {
   const [params, setParams] = useSearchParams()
   const state = parseState(params)
+  // Rebuilding the query string must keep the session drawer's ?session= so an open drawer stays open.
+  const withSession = (prev: URLSearchParams, next: URLSearchParams) => {
+    const session = prev.get('session')
+    if (session) next.set('session', session)
+    return next
+  }
   const update = (change: Partial<ScheduleState>) =>
-    setParams((prev) => toParams({ ...parseState(prev), ...change }), { replace: true })
+    setParams((prev) => withSession(prev, toParams({ ...parseState(prev), ...change })), { replace: true })
   const setFilters = (filters: Filters) => update({ filters })
   const openProfile = useOpenProfile()
+  // Bumped when the session drawer changes the agenda: reload the day and the agenda ids.
+  const agendaVersion = useAgendaVersion()
 
   const [meta, setMeta] = useState<Meta | null>(null)
   const [days, setDays] = useState<string[]>([])
@@ -96,7 +105,7 @@ export default function Schedule() {
       .then((data) => setDayAnswer({ key: day, data }))
       .catch(() => !ctrl.signal.aborted && setDayAnswer({ key: day, failed: true }))
     return () => ctrl.abort()
-  }, [day, meta])
+  }, [day, meta, agendaVersion])
 
   useEffect(() => {
     if (!meta) return
@@ -105,7 +114,7 @@ export default function Schedule() {
       .then(setAgendaIds)
       .catch(() => !ctrl.signal.aborted && setAgendaIds(new Set()))
     return () => ctrl.abort()
-  }, [meta])
+  }, [meta, agendaVersion])
 
   // Add or remove, then reload the day and the agenda ids so For you, clashes and the buttons agree.
   const toggleAgenda: ToggleAgenda = async (sessionId, on) => {
@@ -136,7 +145,7 @@ export default function Schedule() {
     const q = query.trim()
     if (q === debounced) return
     const t = setTimeout(
-      () => setParams((prev) => toParams({ ...parseState(prev), q }), { replace: true }),
+      () => setParams((prev) => withSession(prev, toParams({ ...parseState(prev), q })), { replace: true }),
       DEBOUNCE_MS,
     )
     return () => clearTimeout(t)
