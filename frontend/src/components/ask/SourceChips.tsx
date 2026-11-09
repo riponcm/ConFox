@@ -32,7 +32,7 @@ export default function SourceChips({ text, sources, onSelect }: Props) {
             <span className="chat-source-n">{s.n}</span>
             <span className="chat-source-body">
               <span className="chat-source-title">{s.title}</span>
-              {(s.kind === 'chunk' || s.kind === 'transcript') && (
+              {s.kind === 'transcript' && (
                 <span className="chat-source-meta">
                   <FileText size={12} aria-hidden="true" /> Sample transcript (generated), not the speaker&rsquo;s words
                 </span>

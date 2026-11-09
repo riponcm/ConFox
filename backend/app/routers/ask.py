@@ -306,7 +306,7 @@ def build_sources(
         n = len(sources) + 1
         title = titles.get(c["session_id"], "a keynote")
         sources.append(
-            {"n": n, "kind": "chunk", "id": c["session_id"], "title": f"Sample transcript: {title}"}
+            {"n": n, "kind": "transcript", "id": c["session_id"], "title": f"Sample transcript: {title}"}
             | {"starts_at": None, "room": None, "chunk": c["chunk"]}
         )
         context.append(f"[{n}] Sample transcript (generated) of '{title}', part {c['chunk']}:\n{c['text']}")

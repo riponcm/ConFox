@@ -150,7 +150,7 @@ def test_build_sources_numbers_sessions_then_people_then_chunks():
     chunk = {"session_id": "s1", "chunk": 3, "text": "words"}
     sources, context = ask.build_sources([SESSION], [ALICE, BOB], [chunk], {"s1": "Cheap GPUs"})
     assert [s["n"] for s in sources] == [1, 2, 3, 4]
-    assert [s["kind"] for s in sources] == ["session", "person", "person", "chunk"]
+    assert [s["kind"] for s in sources] == ["session", "person", "person", "transcript"]
     assert sources[0]["session_kind"] == "talk" and sources[0]["room"] == "Hall A"
     assert sources[1] == {"n": 2, "kind": "person", "id": "alice", "name": "Alice Moreno"} | {
         "title": "ML Engineer",
