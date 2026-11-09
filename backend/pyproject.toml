@@ -1,0 +1,30 @@
+[project]
+name = "confox-api"
+version = "0.1.0"
+description = "Confox API: FastAPI over Elasticsearch"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "elasticsearch>=9,<10",
+    "pydantic-settings>=2.6",
+    "opentelemetry-api>=1.30",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "pytest>=8",
+    "httpx2>=2.16.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

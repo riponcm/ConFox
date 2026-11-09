@@ -8,6 +8,7 @@ Gathered before the event (reading docs, testing services, planning). No product
 - Session kinds need deriving from track and title (keynote, talk, lightning, break, food, co-located day). Titles can start with emoji, so text is normalised before classifying.
 - Co-located events on Monday run all day; treating them as normal sessions would make every other session look like a clash.
 - Attendee profiles are not public, so the demo uses generated sample attendees, clearly labelled.
+- The snapshot the app uses and its provenance: [data/README.md](../data/README.md).
 
 ## Search (Elasticsearch)
 

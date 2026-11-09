@@ -65,10 +65,27 @@ Implementation is described in the docs as each piece lands; every feature is a 
 | [Plan](docs/plan.md) | Build order, one pull request per feature, cut line |
 | [Architecture](docs/architecture.md) | Components and data flow (filled in as we build) |
 | [Research](docs/research.md) | Notes gathered before the event: data, search, observability |
+| [Data](data/README.md) | What we collected, when, from where, and what is generated |
 
 ## Run locally
 
-Setup instructions arrive with the first code pull request.
+Needs Docker, [uv](https://docs.astral.sh/uv/) and Node 22+.
+
+```bash
+cp .env.example .env    # fill in keys; .env is git-ignored
+docker compose up -d    # Elasticsearch on localhost:9200
+```
+
+```bash
+cd backend && uv sync && uv run uvicorn app.main:app --port 8000 --reload
+```
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+Open http://localhost:5173 — the page shows whether the API and Elasticsearch are up.
+How we work (branches, checks, review): [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## AI use
 
@@ -76,7 +93,7 @@ We use [Claude Code](https://claude.com/claude-code) (Anthropic) as a coding ass
 
 ## Credits
 
-- Schedule data: the public KubeCon + CloudNativeCon North America 2026 schedule.
+- Schedule data: the public KubeCon + CloudNativeCon North America 2026 schedule on Sessionize ([provenance](data/README.md)).
 - Sponsor tools: Elasticsearch, Dash0, Gitar.
 - Built at the [WeMakeDevs](https://www.wemakedevs.org) Cloud Native Hackathon, Salt Lake City, November 2026.
 
