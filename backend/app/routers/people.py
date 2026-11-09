@@ -252,8 +252,8 @@ def match(
     filters = {"school": school, "company": company, "community": community, "interest": interest}
     filters |= {"country": country, "city": city}
     match_requests.add(1, {"kind": kind or "all", "has_query": bool(q.strip()), "filtered": any(filters.values())})
-    activity.record("match", user_id, q.strip())
     user, vector = _load_user(user_id)
+    activity.record("match", user_id, q.strip())  # only once the user is known to exist
     post = build_filters(filters)
     body = {
         "size": max(1, min(size, 100)),
