@@ -31,12 +31,9 @@ export async function getJSON<T>(path: string, params?: Params, init?: RequestIn
 }
 
 export async function postJSON<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
-  const r = await fetch(apiUrl(path), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    ...init,
-  })
+  const headers = new Headers(init?.headers)
+  headers.set('Content-Type', 'application/json')
+  const r = await fetch(apiUrl(path), { ...init, method: 'POST', headers, body: JSON.stringify(body) })
   if (!r.ok) throw new ApiError(r.status, `${r.status} ${r.statusText}`)
   return (await r.json()) as T
 }
