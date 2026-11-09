@@ -1,0 +1,584 @@
+{
+  "apiVersion": "perses.dev/v1alpha1",
+  "kind": "PersesDashboard",
+  "metadata": {
+    "name": "confox-overview"
+  },
+  "spec": {
+    "display": {
+      "name": "Confox overview",
+      "description": "Searches, matches, Claude usage and cost, errors and latency for confox-api and confox-web"
+    },
+    "duration": "1h",
+    "refreshInterval": "30s",
+    "panels": {
+      "searches": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Searches (1h)",
+            "description": "Searches served by Elasticsearch in the last hour"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal",
+                "decimalPlaces": 0
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "sum(increase({otel_metric_name=\"confox.search.requests\"}[1h]))",
+                    "seriesNameFormat": "Searches (1h)"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "matches": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Match requests (1h)",
+            "description": "People matches in the last hour"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal",
+                "decimalPlaces": 0
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "sum(increase({otel_metric_name=\"confox.match.requests\"}[1h]))",
+                    "seriesNameFormat": "Match requests (1h)"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "chats": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Ask and Catch up turns (1h)",
+            "description": "Questions answered by Claude in the last hour"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal",
+                "decimalPlaces": 0
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "sum(increase({otel_metric_name=\"confox.chat.requests\"}[1h]))",
+                    "seriesNameFormat": "Ask and Catch up turns (1h)"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "cost": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Claude cost (1h)",
+            "description": "Estimated Claude spend in the last hour"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "decimal",
+                "decimalPlaces": 3
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "sum(increase({otel_metric_name=\"confox.llm.cost_usd\"}[1h]))",
+                    "seriesNameFormat": "Claude cost (1h)"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "error_rate": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "API error rate",
+            "description": "Share of confox-api server spans with status ERROR, last 5 minutes"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "percent",
+                "decimalPlaces": 1
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "100 * sum(rate({otel_metric_name=\"dash0.spans\", service_name=\"confox-api\", otel_span_kind=\"SERVER\", otel_span_status_code=\"ERROR\"}[5m])) / sum(rate({otel_metric_name=\"dash0.spans\", service_name=\"confox-api\", otel_span_kind=\"SERVER\"}[5m]))",
+                    "seriesNameFormat": "API error rate"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "api_p95": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "API latency p95",
+            "description": "95th percentile of confox-api server spans, last 5 minutes"
+          },
+          "plugin": {
+            "kind": "StatChart",
+            "spec": {
+              "calculation": "last-number",
+              "format": {
+                "unit": "milliseconds",
+                "decimalPlaces": 0
+              },
+              "sparkline": {}
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "histogram_quantile(0.95, sum(rate({otel_metric_name=\"dash0.spans.duration\", service_name=\"confox-api\", otel_span_kind=\"SERVER\"}[5m]))) * 1000",
+                    "seriesNameFormat": "API latency p95"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "search_latency": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Search latency p95 by mode",
+            "description": "Keyword only (bm25) vs keyword + meaning (hybrid); hybrid includes embedding the query"
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "visual": {
+                "display": "line",
+                "areaOpacity": 0.2
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "milliseconds"
+                },
+                "min": 0
+              },
+              "legend": {
+                "position": "bottom"
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "histogram_quantile(0.95, sum by (mode) (rate({otel_metric_name=\"confox.search.duration\"}[5m])))",
+                    "seriesNameFormat": "{{mode}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "by_route": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Requests by route",
+            "description": "Requests per minute for each API route"
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "visual": {
+                "display": "line",
+                "areaOpacity": 0.2
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "decimal"
+                },
+                "min": 0
+              },
+              "legend": {
+                "position": "bottom"
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "60 * sum by (otel_span_name) (rate({otel_metric_name=\"dash0.spans\", service_name=\"confox-api\", otel_span_kind=\"SERVER\"}[5m]))",
+                    "seriesNameFormat": "{{otel_span_name}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "tokens": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Claude tokens per minute",
+            "description": "Input and output tokens"
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "visual": {
+                "display": "line",
+                "areaOpacity": 0.2
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "decimal"
+                },
+                "min": 0
+              },
+              "legend": {
+                "position": "bottom"
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "60 * sum by (type) (rate({otel_metric_name=\"confox.llm.tokens\"}[5m]))",
+                    "seriesNameFormat": "{{type}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "llm_latency": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Claude call p95",
+            "description": "Duration of Claude calls, 95th percentile"
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "visual": {
+                "display": "line",
+                "areaOpacity": 0.2
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "milliseconds"
+                },
+                "min": 0
+              },
+              "legend": {
+                "position": "bottom"
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "histogram_quantile(0.95, sum(rate({otel_metric_name=\"confox.llm.duration\"}[5m])))",
+                    "seriesNameFormat": "p95"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "errors": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Errors by service",
+            "description": "Error spans per minute, API and browser"
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "visual": {
+                "display": "line",
+                "areaOpacity": 0.2
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "decimal"
+                },
+                "min": 0
+              },
+              "legend": {
+                "position": "bottom"
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "60 * sum by (service_name) (rate({otel_metric_name=\"dash0.spans\", otel_span_status_code=\"ERROR\", service_name=~\"confox-.*\"}[5m]))",
+                    "seriesNameFormat": "{{service_name}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "es_ops": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Elasticsearch calls by operation",
+            "description": "Elasticsearch calls per minute from confox-api (the client traces them as INTERNAL spans)"
+          },
+          "plugin": {
+            "kind": "TimeSeriesChart",
+            "spec": {
+              "visual": {
+                "display": "line",
+                "areaOpacity": 0.2
+              },
+              "yAxis": {
+                "format": {
+                  "unit": "decimal"
+                },
+                "min": 0
+              },
+              "legend": {
+                "position": "bottom"
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "TimeSeriesQuery",
+              "spec": {
+                "plugin": {
+                  "kind": "PrometheusTimeSeriesQuery",
+                  "spec": {
+                    "query": "60 * sum by (otel_span_name) (rate({otel_metric_name=\"dash0.spans\", service_name=\"confox-api\", otel_span_kind=\"INTERNAL\"}[5m]))",
+                    "seriesNameFormat": "{{otel_span_name}}"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "layouts": [
+      {
+        "kind": "Grid",
+        "spec": {
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 4,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/searches"
+              }
+            },
+            {
+              "x": 4,
+              "y": 0,
+              "width": 4,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/matches"
+              }
+            },
+            {
+              "x": 8,
+              "y": 0,
+              "width": 4,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/chats"
+              }
+            },
+            {
+              "x": 12,
+              "y": 0,
+              "width": 4,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/cost"
+              }
+            },
+            {
+              "x": 16,
+              "y": 0,
+              "width": 4,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/error_rate"
+              }
+            },
+            {
+              "x": 20,
+              "y": 0,
+              "width": 4,
+              "height": 4,
+              "content": {
+                "$ref": "#/spec/panels/api_p95"
+              }
+            },
+            {
+              "x": 0,
+              "y": 4,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/search_latency"
+              }
+            },
+            {
+              "x": 12,
+              "y": 4,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/by_route"
+              }
+            },
+            {
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/tokens"
+              }
+            },
+            {
+              "x": 12,
+              "y": 12,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/llm_latency"
+              }
+            },
+            {
+              "x": 0,
+              "y": 20,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/errors"
+              }
+            },
+            {
+              "x": 12,
+              "y": 20,
+              "width": 12,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/es_ops"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
