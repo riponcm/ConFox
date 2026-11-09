@@ -5,6 +5,8 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
+      # Native RRF needs a trial or Enterprise licence; the app falls back to client-side RRF otherwise.
+      - xpack.license.self_generated.type=trial
       - ES_JAVA_OPTS=-Xms1g -Xmx1g
     ports:
       - "127.0.0.1:9200:9200"
