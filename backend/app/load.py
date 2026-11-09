@@ -2,6 +2,8 @@
 
 uv run python -m app.load                 # everything
 uv run python -m app.load --only sessions # one index; the others are left alone
+
+With OPENAI_API_KEY set, sessions and people also get an `embedding` vector for semantic search.
 """
 
 import argparse
@@ -15,12 +17,38 @@ from .config import RAW_SCHEDULE, settings
 from .data.demo import emma_monday
 from .data.people import sample_attendees, speakers
 from .data.sessions import build_sessions
+from .embeddings import embed, enabled
 from .es import es
 from .indices import rebuild
 from .telemetry import setup_telemetry, shutdown_telemetry
 
 log = logging.getLogger("confox.load")
 tracer = trace.get_tracer("confox.load")
+
+EMBED_CHARS = 2000
+
+
+def _join(*parts) -> str:
+    flat = [", ".join(p) if isinstance(p, list) else p for p in parts]
+    return "\n".join(str(p).strip() for p in flat if p)[:EMBED_CHARS]
+
+
+def session_text(s: dict) -> str:
+    """What a session is about, for its embedding: title, track, projects, then the description."""
+    return _join(s["title"], s.get("track"), s.get("projects"), s.get("description"))
+
+
+def person_text(p: dict) -> str:
+    return _join(p["name"], p.get("title"), p.get("company"), p.get("interests_text"), p.get("bio"))
+
+
+def with_embeddings(docs: list[dict], text) -> list[dict]:
+    """Add an `embedding` to each document; unchanged when embeddings are disabled (no key)."""
+    if not enabled():
+        log.warning("OPENAI_API_KEY not set: indexing without embeddings, search will be keyword only")
+        return docs
+    vectors = embed([text(d) for d in docs])
+    return [d | {"embedding": v} for d, v in zip(docs, vectors, strict=True)]
 
 
 def _index(index: str, docs: list[dict]) -> int:
@@ -46,9 +74,9 @@ def main() -> None:
         sessions = build_sessions(raw)
         attendees = sample_attendees()
         if "sessions" in only:
-            _index(settings.idx_sessions, sessions)
+            _index(settings.idx_sessions, with_embeddings(sessions, session_text))
         if "people" in only:
-            _index(settings.idx_people, attendees + speakers(raw))
+            _index(settings.idx_people, with_embeddings(attendees + speakers(raw), person_text))
         if "agenda" in only:
             _index(settings.idx_agenda, emma_monday(sessions, attendees))
     finally:
