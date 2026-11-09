@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 from opentelemetry import metrics, trace
 from pydantic import BaseModel, Field
 
+from .. import activity
 from .. import agenda_store as store
 from ..clock import now
 from ..config import settings
@@ -89,6 +90,7 @@ def _answer(item_id: str, user_id: str, status: str, action: str) -> dict:
         if slot and slot.get("room"):
             extra["room"] = slot["room"]
     requests.add(1, {"action": action})
+    activity.record(f"connect_{action}", user_id, item.get("with_id") or "")
     updated = _set_status(item, status, extra)  # both copies share status and room; direction stays per side
     es.update(index=settings.idx_agenda, id=item_id, doc={"direction": "incoming"})
     store.refresh()
@@ -134,6 +136,7 @@ def send(body: SendRequest) -> dict:
     )
     store.refresh()
     requests.add(1, {"action": "send"})
+    activity.record("connect_request", body.user_id, body.with_id)
     return item | {"id": doc_id}
 
 
@@ -154,4 +157,5 @@ def withdraw(item_id: str, user_id: str = Query(default_factory=lambda: settings
     if item.get("status") != "pending" or store.direction(item) != "outgoing":
         raise HTTPException(status_code=409, detail=f"meeting {item_id} is not a pending request you sent")
     requests.add(1, {"action": "withdraw"})
+    activity.record("connect_withdraw", user_id, item.get("with_id") or "")
     return _set_status(item, "withdrawn")

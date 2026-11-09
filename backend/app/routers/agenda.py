@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from opentelemetry import metrics, trace
 from pydantic import BaseModel, Field
 
+from .. import activity
 from .. import agenda_store as store
 from ..config import settings
 from ..es import es
@@ -78,6 +79,7 @@ def add(body: AddSession) -> dict:
         log.info("agenda: %s already exists", doc_id)
     else:
         changes.add(1, {"action": "add"})
+        activity.record("agenda_add", body.user_id, body.session_id)
     store.refresh()
     return item | {"id": doc_id}
 
@@ -103,4 +105,5 @@ def remove(session_id: str, user_id: str = Query(default_factory=lambda: setting
     if not deleted:
         raise HTTPException(status_code=404, detail=f"session {session_id} is not on the agenda")
     changes.add(1, {"action": "remove"})
+    activity.record("agenda_remove", user_id, session_id)
     return {"session_id": session_id, "deleted": deleted}

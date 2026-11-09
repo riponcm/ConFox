@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from opentelemetry import trace
 
-from .. import clock, llm
+from .. import activity, clock, llm
 from ..config import settings
 from ..es import es
 from .ask import Conversation, when
@@ -190,6 +190,7 @@ def ask(session_id: str, body: Conversation) -> StreamingResponse:
     ]
     parts = "\n\n".join(f"[{c['n']}] {c['text']}" for c in chunks)
     question = body.messages[-1].content
+    activity.record("question", settings.demo_user, f"catchup {session_id}")
     history = [m.model_dump() for m in body.messages[:-1]]
     messages = history + [{"role": "user", "content": f"Transcript parts:\n{parts}\n\nQuestion: {question}"}]
     return StreamingResponse(

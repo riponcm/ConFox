@@ -58,6 +58,15 @@ MAPPINGS: dict[str, dict] = {
             "embedding": EMBEDDING,
         }
     },
+    settings.idx_activity: {
+        "properties": {
+            "at": LOCAL_TIME,
+            "user_id": {"type": "keyword"},
+            "kind": {"type": "keyword"},
+            "detail": {"type": "keyword", "ignore_above": 120},
+            "sample": {"type": "boolean"},
+        }
+    },
     settings.idx_agenda: {
         "properties": {
             "user_id": {"type": "keyword"},

@@ -12,6 +12,7 @@ from elasticsearch import ApiError, NotFoundError
 from fastapi import APIRouter, HTTPException
 from opentelemetry import metrics, trace
 
+from .. import activity
 from ..config import settings
 from ..es import es
 
@@ -251,6 +252,7 @@ def match(
     filters = {"school": school, "company": company, "community": community, "interest": interest}
     filters |= {"country": country, "city": city}
     match_requests.add(1, {"kind": kind or "all", "has_query": bool(q.strip()), "filtered": any(filters.values())})
+    activity.record("match", user_id, q.strip())
     user, vector = _load_user(user_id)
     post = build_filters(filters)
     body = {
