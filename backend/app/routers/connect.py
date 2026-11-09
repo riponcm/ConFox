@@ -117,6 +117,7 @@ def send(body: SendRequest) -> dict:
     if body.with_id == body.user_id:
         raise HTTPException(status_code=422, detail="cannot meet yourself")
     person = _person(body.with_id)
+    sender = _person(body.user_id)  # resolve everything that can fail before writing either copy
     slot = store.get_session(body.session_id)
     if slot is None or not slot.get("is_food"):
         raise HTTPException(status_code=404, detail=f"no food or coffee break {body.session_id}")
@@ -128,7 +129,6 @@ def send(body: SendRequest) -> dict:
     item = store.meeting_request(body.user_id, slot, person, body.message, request_id=request_id)
     es.create(index=settings.idx_agenda, id=doc_id, document=item)
     # The recipient gets the request as an incoming item they can accept or decline.
-    sender = _person(body.user_id)
     es.create(
         index=settings.idx_agenda, id=store.meeting_doc_id(body.with_id), document=store.mirror_request(item, sender)
     )
