@@ -2,7 +2,9 @@
 
 import logging
 
-from fastapi import FastAPI, HTTPException
+from elasticsearch import BadRequestError
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from opentelemetry import trace
 
 from .config import settings
@@ -18,6 +20,30 @@ app = FastAPI(title="Confox API")
 instrument_app(app)
 included = include_all(app)
 log.info("routers: %s", ", ".join(included))
+
+
+def es_reason(exc: BadRequestError) -> str:
+    """The most specific reason Elasticsearch gave, e.g. "failed to parse date field [after-lunch] ..."."""
+    body = exc.body if isinstance(exc.body, dict) else {}
+    err = body.get("error") if isinstance(body.get("error"), dict) else {}
+    causes = err.get("root_cause") or []
+    if causes and isinstance(causes[0], dict) and causes[0].get("reason"):
+        return str(causes[0]["reason"])
+    return str(err.get("reason") or exc.message)
+
+
+@app.exception_handler(BadRequestError)
+async def es_bad_request(request: Request, exc: BadRequestError) -> JSONResponse:
+    """Elasticsearch rejected the query as invalid (bad date, bad value): that is a client error, not a crash.
+
+    Answer 400 with the reason instead of a 500, keep the cause on the trace and log it as a warning.
+    """
+    reason = es_reason(exc)
+    log.warning("Elasticsearch rejected the query for %s %s: %s", request.method, request.url.path, reason)
+    span = trace.get_current_span()
+    span.record_exception(exc)
+    span.set_attribute("confox.es.rejected_reason", reason)
+    return JSONResponse(status_code=400, content={"error": "invalid_query", "detail": reason})
 
 
 @app.get("/api/health")

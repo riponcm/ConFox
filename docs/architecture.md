@@ -199,3 +199,4 @@ The page (`src/pages/Schedule.tsx`, `src/components/schedule/`) has day tabs fro
 | Client-side RRF when the licence refuses native RRF | A fresh stack on a basic licence must not fail search; the same formula in Python gives the same ranking |
 | Embeddings computed by the loader, not at ingest in Elasticsearch | Keeps the model call visible in our traces with tokens and cost, and search works keyword only without a key |
 | ASGI `send`/`receive` spans excluded | One server span per request keeps traces readable; Elasticsearch calls still appear as child spans |
+| Elasticsearch "bad request" errors become HTTP 400 | Invalid input (such as an unparseable date) is a client error: the API answers 400 with Elasticsearch's reason, logs a warning and keeps the cause on the trace, instead of a 500 that pages someone. Found with Dash0 Agent0 during the demo rehearsal |
