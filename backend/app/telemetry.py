@@ -8,7 +8,7 @@ import logging
 import os
 
 from opentelemetry import metrics, trace
-from opentelemetry._logs import set_logger_provider
+from opentelemetry._logs import get_logger_provider, set_logger_provider
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -31,11 +31,14 @@ def exporting() -> bool:
     return bool(os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"))
 
 
-def setup_telemetry() -> None:
+def setup_telemetry(service_name: str | None = None) -> None:
     """Install providers and exporters. Call once, before the app and the Elasticsearch client are created."""
     logging.basicConfig(level=logging.INFO)
     resource = Resource.create(
-        {"service.name": settings.service_name, "deployment.environment.name": settings.deployment_environment}
+        {
+            "service.name": service_name or settings.service_name,
+            "deployment.environment.name": settings.deployment_environment,
+        }
     )
 
     tracer_provider = TracerProvider(resource=resource)
@@ -57,5 +60,13 @@ def setup_telemetry() -> None:
     log.info("telemetry ready (export %s)", "on" if exporting() else "off: OTEL_EXPORTER_OTLP_ENDPOINT not set")
 
 
+def shutdown_telemetry() -> None:
+    """Flush and stop exporters; short-lived commands call this so their spans are not lost."""
+    for provider in (trace.get_tracer_provider(), metrics.get_meter_provider(), get_logger_provider()):
+        if hasattr(provider, "shutdown"):
+            provider.shutdown()
+
+
 def instrument_app(app) -> None:
-    FastAPIInstrumentor.instrument_app(app)
+    # One server span per request; the per-message ASGI "send"/"receive" spans are noise for this app.
+    FastAPIInstrumentor.instrument_app(app, exclude_spans=["send", "receive"])

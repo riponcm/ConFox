@@ -2,11 +2,11 @@
 
 import logging
 
-from elasticsearch import Elasticsearch
 from fastapi import FastAPI, HTTPException
 from opentelemetry import trace
 
 from .config import settings
+from .es import es
 from .telemetry import instrument_app, setup_telemetry
 
 setup_telemetry()
@@ -15,7 +15,6 @@ log = logging.getLogger(__name__)
 
 app = FastAPI(title="Confox API")
 instrument_app(app)
-es = Elasticsearch(settings.es_url, request_timeout=5)
 
 
 @app.get("/api/health")

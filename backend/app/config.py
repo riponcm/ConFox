@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
+RAW_SCHEDULE = ROOT / "data" / "raw" / "sessionize-kubecon-na-2026.json"
 ENV_FILES = (ROOT / "backend" / ".env", ROOT / ".env")
 
 for _f in ENV_FILES:
@@ -21,6 +22,8 @@ class Settings(BaseSettings):
 
     es_url: str = "http://localhost:9200"
     idx_sessions: str = "confox-sessions"
+    idx_people: str = "confox-people"
+    idx_agenda: str = "confox-agenda"
 
     service_name: str = "confox-api"
     deployment_environment: str = "hackathon"
