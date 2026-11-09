@@ -213,6 +213,21 @@ Ids: `{user}-s-{session_id}` for added sessions, `{user}-m-{8 hex}` for new requ
 - **Writes.** Every write refreshes the agenda index so the next read sees it. Counters: `confox.agenda.changes` (attribute `action`: add, remove) and `confox.connect.requests` (`action`: send, accept, decline); the request spans carry the session or person id.
 - **Schedule.** Each day-view row except breaks and registration has an "Agenda" / "Added" toggle; it writes, then reloads the day and the agenda ids, so For you, clashes and the count update together. Search results get the same toggle through the `SessionCard` aside, with state from `GET /api/agenda`. Outgoing requests show as "Request sent".
 - **People.** Every card has a primary "Meet" button that opens an inline panel: the free slots as a native radio group (first one chosen and focused), an optional line, "Send request". After sending, the card says "Request sent for 14:48 · Coffee" and the button becomes a disabled "Requested" (warn colours, since it is pending); people with a pending outgoing request show "Requested" on load, and a confirmed meeting shows as a green chip. Escape closes the panel and returns focus to the button.
+## My brief (pull request 10)
+
+One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (day of `clock.now()`) lives in `backend/app/routers/brief.py`; the page is `src/pages/Brief.tsx` with `src/components/brief/` and `src/styles/brief.css`. Nothing new is stored: the endpoint reads `confox-sessions`, `confox-people` and `confox-agenda` and reuses the other features' helpers (schedule `_day_sessions`, `annotate`, `_knn`; Match `build_match_query`, `why`; `next_food()`).
+
+| Part | Rule |
+|---|---|
+| `timeline` | Today's confirmed agenda sessions and meetings plus the day's food breaks, by start. A break that starts with a confirmed meeting is left out (the coffee with Alice is that break). Co-located sessions carry `all_day` and a short title ("Cloud Native AI + Inference Day"; `full_title` keeps the original) |
+| `is_next` | The first item not yet ended; a co-located day already under way is skipped while something else is still to come, so the marker moves to the coffee, then lunch |
+| `gaps` | Free windows of 60+ minutes between 08:00 and 19:00, from now on; all-day co-located events do not block (they would hide every gap) |
+| `requests` | Pending meetings today split into `incoming` (no direction counts as incoming) and `outgoing`; a request without a room takes the room of the food break at the same time |
+| `people` | The Match ranking (same query, vector when present, lexical fallback logged on the span), minus anyone the user already has a meeting, request or declined request with today; up to 3, each with the first `why` reason and `free_at`: the first food break after now that does not overlap the user's confirmed plans |
+| `suggested` | Up to 3 for-you sessions (interest phrase or kNN) not on the agenda, not started, not clashing; other co-located days and breaks left out |
+| `summary` | Plain sentences from the data, no LLM: the anchor event, confirmed meetings, waiting requests |
+
+The page shows the date and summary, "People today" (confirmed meetings, incoming requests with Accept and Decline, suggested people linking to `/people?q=`), the "Your day" timeline (dashed free rows link to `/schedule`) and "Suggested for you" as `SessionCard`s. Accept and Decline call `POST /api/connect/{id}/accept|decline` from the connect pull request and refresh; on a 404 the card says "Not available yet". The request span carries `confox.brief.timeline`, `confox.brief.requests_incoming`, `confox.brief.people` and `confox.brief.suggested`. Agenda items and people are labelled as generated sample data.
 
 ## Key decisions
 
