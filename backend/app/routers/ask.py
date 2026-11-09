@@ -80,7 +80,13 @@ def asked_day(question: str, today: date) -> date | None:
         return today + timedelta(days=1)
     for i, name in enumerate(WEEKDAYS):
         if re.search(rf"\b{name}\b", q):
-            return today + timedelta(days=(i - today.weekday()) % 7)
+            # The nearest such weekday, past or future: on Wednesday, "Tuesday" means yesterday, not next week.
+            delta = i - today.weekday()
+            if delta > 3:
+                delta -= 7
+            elif delta < -3:
+                delta += 7
+            return today + timedelta(days=delta)
     return None
 
 

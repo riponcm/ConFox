@@ -7,6 +7,7 @@ One span per call, named `chat {model}`, with the OpenTelemetry GenAI semantic-c
 Streaming calls record usage when the stream ends, from the final message.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -229,9 +230,19 @@ async def stream(
         try:
             req = _request(system, messages, max_tokens, effort, None)
             async with async_client().beta.messages.stream(**req) as s:
-                async for event in s:
-                    if event.type == "text":
-                        yield event.text
+                try:
+                    async for event in s:
+                        if event.type == "text":
+                            yield event.text
+                except (GeneratorExit, asyncio.CancelledError):
+                    # The user stopped the answer or disconnected: Claude has still used tokens, so record what
+                    # the stream has seen so far before letting the cancellation through.
+                    span.set_attribute("confox.llm.cancelled", True)
+                    try:
+                        _record(span, s.current_message_snapshot, feature, started)
+                    except Exception:
+                        log.warning("could not record usage for a cancelled %s stream", feature)
+                    raise
                 final = await s.get_final_message()
         except Exception as exc:
             _fail(span, exc, feature, started)

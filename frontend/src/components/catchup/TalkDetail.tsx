@@ -30,13 +30,17 @@ export default function TalkDetail({ id, onBack }: Props) {
       .then((d) => {
         if (!live) return
         setDetail(d)
-        headingRef.current?.focus()
       })
       .catch((e: Error) => live && setError(e.message))
     return () => {
       live = false
     }
   }, [id])
+
+  // Move focus to the talk title once it has rendered, so keyboard and screen-reader users land on it.
+  useEffect(() => {
+    if (detail) headingRef.current?.focus()
+  }, [detail])
 
   function showPart(source: Source) {
     // Open the transcript first so the part has a position to scroll to.

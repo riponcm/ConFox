@@ -53,6 +53,10 @@ class _Stream:
     def get_final_message(self):
         return self.final
 
+    @property
+    def current_message_snapshot(self):  # what the SDK has accumulated so far
+        return self.final
+
     async def __aenter__(self):
         return self
 

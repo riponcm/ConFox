@@ -50,3 +50,19 @@ def test_stream_yields_text_then_usage(fake_claude, spans):
     assert items[:2] == ["a", "b"]
     assert isinstance(items[2], llm.Usage) and items[2].output_tokens == 200
     assert any(s.name == "chat claude-opus-5-5" for s in spans.get_finished_spans())
+
+
+def test_stopped_stream_still_records_usage(fake_claude, spans):
+    fake_claude(["a", "b", "c"])
+
+    async def stop_after_first():
+        gen = llm.stream("s", [{"role": "user", "content": "q"}], feature="test")
+        first = await gen.__anext__()
+        await gen.aclose()  # what Starlette does when the user stops or disconnects
+        return first
+
+    assert asyncio.run(stop_after_first()) == "a"
+    span = next(s for s in spans.get_finished_spans() if s.name == "chat claude-opus-5-5")
+    assert span.attributes["confox.llm.cancelled"] is True
+    assert span.attributes["gen_ai.usage.input_tokens"] > 0
+    assert "confox.llm.cost_usd" in span.attributes

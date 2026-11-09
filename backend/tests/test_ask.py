@@ -21,6 +21,13 @@ def test_asked_day():
     assert ask.asked_day("Who knows about KServe?", MONDAY) is None
 
 
+def test_asked_day_picks_the_nearest_weekday():
+    wednesday = date(2026, 11, 11)
+    assert ask.asked_day("What did the Tuesday keynotes say?", wednesday) == date(2026, 11, 10)
+    assert ask.asked_day("Anything on Thursday?", MONDAY) == date(2026, 11, 12)
+    assert ask.asked_day("What happened on Sunday?", MONDAY) == date(2026, 11, 8)
+
+
 def test_ask_streams_sources_then_text_then_usage(monkeypatch, fake_claude, spans):
     monkeypatch.setattr(ask, "retrieve", lambda q, u: (SOURCES, ["[1] Cheap GPUs"], {"name": "Emma Carter"}))
     fake = fake_claude(["Go to ", "Cheap GPUs [1]."])
