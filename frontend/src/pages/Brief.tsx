@@ -3,6 +3,7 @@ import { CalendarDays, RefreshCw, Sparkles, Users } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
 import SessionCard from '../components/SessionCard.tsx'
 import DayTimeline from '../components/brief/DayTimeline.tsx'
+import { useAgendaVersion } from '../components/session/context.ts'
 import PeopleToday from '../components/brief/PeopleToday.tsx'
 import { longDay } from '../components/brief/types.ts'
 import type { BriefResponse } from '../components/brief/types.ts'
@@ -11,6 +12,8 @@ import '../styles/brief.css'
 export default function Brief() {
   const [data, setData] = useState<BriefResponse | null>(null)
   const [failed, setFailed] = useState(false)
+  // Reload when the session drawer adds or removes something, so the timeline and suggestions agree.
+  const agendaVersion = useAgendaVersion()
 
   const fetchBrief = useCallback(() => {
     getJSON<BriefResponse>('brief', { user_id: DEMO_USER })
@@ -21,7 +24,7 @@ export default function Brief() {
       .catch(() => setFailed(true))
   }, [])
 
-  useEffect(fetchBrief, [fetchBrief])
+  useEffect(fetchBrief, [fetchBrief, agendaVersion])
 
   const load = () => {
     setFailed(false)

@@ -1,6 +1,7 @@
 import { Clock, TriangleAlert, Users, UsersRound } from 'lucide-react'
 import AgendaButton from './AgendaButton.tsx'
 import KindIcon from './KindIcon.tsx'
+import SessionLink from '../session/SessionLink.tsx'
 import { canAdd, type ToggleAgenda } from './agenda.ts'
 import { goingLabel, goingTitle } from './filters.ts'
 import { durationMin, hhmm, roomLabel } from './time.ts'
@@ -65,7 +66,9 @@ export function ScheduleRow({ session: s, muted = false, showTime, onToggleAgend
       <div className="sch-body">
         <p className="sch-title">
           <KindIcon kind={s.kind} isFood={s.is_food} />
-          <span>{s.title}</span>
+          <span>
+            <SessionLink id={s.id}>{s.title}</SessionLink>
+          </span>
         </p>
         <p className="sch-meta">
           {showTime && (

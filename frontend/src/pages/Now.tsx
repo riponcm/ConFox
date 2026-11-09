@@ -2,12 +2,21 @@ import { useEffect, useState } from 'react'
 import { CalendarCheck, Coffee, Radio, Timer } from 'lucide-react'
 import { DEMO_USER, getJSON } from '../api.ts'
 import SessionCard from '../components/SessionCard.tsx'
+import SessionLink from '../components/session/SessionLink.tsx'
 import { dayLabel, hhmm, roomLabel } from '../components/schedule/time.ts'
 import type { Session } from '../types.ts'
 import '../styles/now.css'
 
 type Food = { session: Session; status: 'now' | 'next'; minutes: number }
-type AgendaItem = { title: string; kind: string; with_name?: string; starts_at: string; ends_at: string; room?: string }
+type AgendaItem = {
+  title: string
+  kind: string
+  with_name?: string
+  session_id?: string
+  starts_at: string
+  ends_at: string
+  room?: string
+}
 type NowResponse = {
   now: string
   on_now: Session[]
@@ -54,9 +63,10 @@ export default function Now() {
               {data.food ? (
                 <>
                   <p className="now-big">
+                    <SessionLink id={data.food.session.id}>{data.food.session.title}</SessionLink>
                     {data.food.status === 'now'
-                      ? `${data.food.session.title} now, ${inMinutes(data.food.minutes)} left`
-                      : `${data.food.session.title} in ${inMinutes(data.food.minutes)}`}
+                      ? ` now, ${inMinutes(data.food.minutes)} left`
+                      : ` in ${inMinutes(data.food.minutes)}`}
                   </p>
                   <p className="now-sub">
                     {hhmm(data.food.session.starts_at)}&ndash;{hhmm(data.food.session.ends_at)} &middot;{' '}
@@ -75,9 +85,13 @@ export default function Now() {
               {data.my_next ? (
                 <>
                   <p className="now-big">
-                    {data.my_next.kind === 'meeting' && data.my_next.with_name
-                      ? `${data.my_next.title} with ${data.my_next.with_name}`
-                      : data.my_next.title}
+                    {data.my_next.kind === 'meeting' && data.my_next.with_name ? (
+                      `${data.my_next.title} with ${data.my_next.with_name}`
+                    ) : data.my_next.session_id ? (
+                      <SessionLink id={data.my_next.session_id}>{data.my_next.title}</SessionLink>
+                    ) : (
+                      data.my_next.title
+                    )}
                   </p>
                   <p className="now-sub">
                     {hhmm(data.my_next.starts_at)}&ndash;{hhmm(data.my_next.ends_at)}

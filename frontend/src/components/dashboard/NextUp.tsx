@@ -1,4 +1,5 @@
 import { MapPin } from 'lucide-react'
+import SessionLink from '../session/SessionLink.tsx'
 import { type DashboardData, groupOf, hhmm, hhmmFromMinutes, minutesOf } from './types.ts'
 
 const WINDOW_MINUTES = 90
@@ -24,7 +25,9 @@ export default function NextUp({ data }: { data: DashboardData }) {
                 {hhmm(s.starts_at)}
               </time>
               <div className="dash-next-body">
-                <p className="dash-next-title">{s.title}</p>
+                <p className="dash-next-title">
+                  <SessionLink id={s.id}>{s.title}</SessionLink>
+                </p>
                 <p className="dash-next-meta">
                   <span className="dash-kind">
                     <span className="dash-swatch" style={{ background: group.color }} aria-hidden="true" />

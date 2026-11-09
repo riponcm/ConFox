@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { ApiError, deleteJSON, getJSON, postJSON } from '../api.ts'
 import { useOpenProfile } from '../components/shellContext.ts'
+import { useAgendaVersion } from '../components/session/context.ts'
 import DayView from '../components/schedule/DayView.tsx'
 import FilterPanel from '../components/schedule/FilterPanel.tsx'
 import InterestChips from '../components/schedule/InterestChips.tsx'
@@ -51,6 +52,8 @@ export default function Schedule() {
     setParams((prev) => toParams({ ...parseState(prev), ...change }), { replace: true })
   const setFilters = (filters: Filters) => update({ filters })
   const openProfile = useOpenProfile()
+  // Bumped when the session drawer changes the agenda: reload the day and the agenda ids.
+  const agendaVersion = useAgendaVersion()
 
   const [meta, setMeta] = useState<Meta | null>(null)
   const [days, setDays] = useState<string[]>([])
@@ -95,7 +98,7 @@ export default function Schedule() {
       .then((data) => setDayAnswer({ key: day, data }))
       .catch(() => !ctrl.signal.aborted && setDayAnswer({ key: day, failed: true }))
     return () => ctrl.abort()
-  }, [day, meta])
+  }, [day, meta, agendaVersion])
 
   useEffect(() => {
     if (!meta) return
@@ -104,7 +107,7 @@ export default function Schedule() {
       .then(setAgendaIds)
       .catch(() => !ctrl.signal.aborted && setAgendaIds(new Set()))
     return () => ctrl.abort()
-  }, [meta])
+  }, [meta, agendaVersion])
 
   // Add or remove, then reload the day and the agenda ids so For you, clashes and the buttons agree.
   const toggleAgenda: ToggleAgenda = async (sessionId, on) => {

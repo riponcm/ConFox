@@ -251,6 +251,32 @@ One calm page for the signed-in attendee's day. `GET /api/brief?user_id=emma` (d
 
 The page shows the date and summary, "People today" (confirmed meetings, incoming requests with Accept and Decline, suggested people linking to `/people?q=`), the "Your day" timeline (dashed free rows link to `/schedule`) and "Suggested for you" as `SessionCard`s. Accept and Decline call `POST /api/connect/{id}/accept|decline` from the connect pull request and refresh; on a 404 the card says "Not available yet". The request span carries `confox.brief.timeline`, `confox.brief.requests_incoming`, `confox.brief.people` and `confox.brief.suggested`. Agenda items and people are labelled as generated sample data.
 
+## Session details
+
+Clicking a session title anywhere opens one drawer with everything about it. `GET /api/sessions/{id}?user_id=emma` lives in `backend/app/routers/sessions.py`; the drawer is `src/components/session/` with `src/styles/session.css`. Nothing new is stored: it reads `confox-sessions`, `confox-people`, `confox-agenda` and `confox-transcripts`, and reuses the Schedule helpers (`_profile`, `_all_agenda`, `_top_matches`, `friends`, `going_body`, `parse_going`, `blocking_items`, `overlap_labels`, `interest_matches`).
+
+| Field | Meaning |
+|---|---|
+| `session` | The whole session document (full description, kind, track, level, projects, room, venue, times, `minutes`), without its vector |
+| `speakers[]` | `confox-people` speaker profiles in the session's order: `name`, `title`, `company`, `bio` (600 characters), `picture`, `links` (http(s) only), `other_sessions` (up to 3). A speaker without a profile keeps the published name |
+| `on_agenda`, `can_add` | The session is a confirmed agenda item of the user; breaks, food and registration cannot be added |
+| `clashes` | Confirmed agenda items overlapping it, as in the day view (`overlap_labels`: a co-located day lists what it overlaps, co-located days on the agenda never block) |
+| `going`, `going_names` | Other attendees who saved it, and up to 8 of the user's people among them (meeting partners, then the top 10 Match results) |
+| `why[]` | Chips `{kind, label}`: profile interests found in the title, projects, track or description (`interest`, or `track` when only the track has it), an interest whose words all appear in the title ("Related to AI inference" for "Cloud Native AI + Inference Day"), profile projects (`project`), and `similar` when the vectors are close |
+| `similarity` | Cosine of profile and session vectors (computed in the API, both are read anyway) and a bucket: `very_close` 0.48+, `close` 0.43+, `related` 0.38+, else `distant`; null without vectors. The cut-offs follow Emma's spread on the demo data (0.12 to 0.55, median 0.39) |
+| `similar` | `{basis, items}`: kNN on the session's own `embedding` (read with `source_exclude_vectors=False`), itself, breaks, food and registration pre-filtered out, top 5 with scores (`semantic`); without a vector, later sessions in the same track (`track`) |
+| `same_track_later` | Up to 5 sessions in the same track starting at or after this one |
+| `catch_up` | `{available, chunks}`: a transcript exists in `confox-transcripts` |
+| `slides_url` | From the schedule when published |
+
+Cost: four reads (session with vector, profile with vector, the user's agenda, the Match query for names; plus an `mget` of agenda session kinds), then one `msearch` with up to six bodies (speakers, their other sessions, kNN, same track later, transcript count, going aggregation). Each body names its index and uses `ignore_unavailable`; a failing body is logged, added to the span as a `confox.session.part_failed` event and left empty, so the drawer still opens. Unknown ids are 404. Spans: `session.read`, `session.user`, `session.related` (attribute `confox.session.parts`) under the request span, which carries `confox.session.id`, `.kind`, `.speakers`, `.similar`, `.similar_basis`, `.going` and `.catch_up`. Pure helpers (`cosine`, `similarity_bucket`, `why_matches`, `title_has_words`, `pick_similar`, `speakers_out`, the body builders and `detail`) are tested in `tests/test_sessions.py`.
+
+Speaker links come from the schedule snapshot; the people loader now indexes them (`links`, an unindexed object). They appear after the next `uv run python -m app.load --only people`; until then the list is empty.
+
+**Drawer.** `SessionDrawerProvider` is mounted once in the Shell. `useSessionDrawer().open(id)` opens it; `SessionLink` is the title button every list uses (Schedule rows in the day view and ranked views, search results and Brief suggestions through `SessionCard`, Compare dialog titles, Now cards and tiles, Dashboard "Starting soon", the My brief timeline). The open session is the URL parameter `?session=<id>` (replace, so a reload or a shared link opens the same drawer on any page); the in-drawer history is kept in the provider, so a similar session or a speaker's other talk opens inside the drawer and Back returns. A URL naming another session starts a fresh history.
+
+It is a native modal `<dialog>` on the right, full width under 768 px (sized in percent, since `100vw` includes the page scrollbar): focus is trapped, Escape closes it (only the drawer when it is opened from the Compare dialog), focus returns to the title that opened it, and after Back or a similar session focus moves to the new title. Content: kind, title, day and time range with length, room and venue, track, level and project chips, the Schedule's `AgendaButton`, "Catch up on this talk" (to `/catch-up?talk=<id>`, the Catch up page's own parameter; `?session=` would reopen the drawer there) and Slides when present, the clash warning, "Why it matches you", Going (labelled sample data), the description (Show more past 360 characters), speakers (initials avatar, name, title and company, bio, links, Also speaking) and Similar sessions (or "Later in this track"). Adding or removing in the drawer bumps `agendaVersion` in the provider; Schedule and My brief reload on it, so rows, For you and the brief agree.
+
 ## Key decisions
 
 | Decision | Why |

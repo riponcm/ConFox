@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { CircleCheck, X } from 'lucide-react'
 import AgendaButton from './AgendaButton.tsx'
 import KindIcon from './KindIcon.tsx'
+import SessionLink from '../session/SessionLink.tsx'
 import { Duration, TimeRange } from './ScheduleRow.tsx'
 import { goingTitle } from './filters.ts'
 import { canAdd, type ToggleAgenda } from './agenda.ts'
@@ -57,7 +58,9 @@ export default function CompareDialog({ sessions, start, onClose, onToggleAgenda
               <li key={s.id} className={s.on_agenda ? 'sch-compare-col is-agenda' : 'sch-compare-col'}>
                 <p className="sch-title">
                   <KindIcon kind={s.kind} isFood={s.is_food} />
-                  <span>{s.title}</span>
+                  <span>
+                    <SessionLink id={s.id}>{s.title}</SessionLink>
+                  </span>
                 </p>
                 {s.on_agenda && (
                   <span className="chip chip-ok">
