@@ -85,6 +85,37 @@ MAPPINGS: dict[str, dict] = {
             "message": {"type": "text"},
             "request_id": {"type": "keyword"},
             "created_at": LOCAL_TIME,
+            # Groups: the meetup group a confirmed "Meetup: ..." item belongs to.
+            "group_id": {"type": "keyword"},
+        }
+    },
+    # Meetup groups (app/groups_store.py). Slots and votes are kept as stored objects, not indexed: they are only
+    # ever read back with their group, and break ids as field names would grow the mapping with every break.
+    settings.idx_groups: {
+        "properties": {
+            "type": {"type": "keyword"},  # "group", or "post" for a hallway board post
+            "title": TEXT_KW,
+            "basis": {"type": "keyword"},
+            "value": {"type": "keyword"},
+            "description": {"type": "text"},
+            "host_id": {"type": "keyword"},
+            "host_name": {"type": "keyword"},
+            "members": {"type": "keyword"},
+            "member_names": {"type": "keyword"},
+            "max_members": {"type": "integer"},
+            "proposed_slots": {"type": "object", "enabled": False},
+            "votes": {"type": "object", "enabled": False},
+            "fixed_slot": {"type": "object", "enabled": False},
+            "status": {"type": "keyword"},
+            "created_at": LOCAL_TIME,
+            "sample": {"type": "boolean"},
+            # Hallway board posts (type "post"): short-lived lines like "At the Cilium booth till 15:00".
+            "text": {"type": "text"},
+            "place": {"type": "keyword"},
+            "tags": {"type": "keyword"},
+            "expires_at": LOCAL_TIME,
+            "author_id": {"type": "keyword"},
+            "author_name": {"type": "keyword"},
         }
     },
     # Sample keynote transcripts in ~200-word chunks (doc_type "chunk"), plus one cached Claude summary per talk

@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react'
-import { Check, Coffee, Undo2, Users, X } from 'lucide-react'
+import { Check, Coffee, Plus, Undo2, Users, X } from 'lucide-react'
 import { postJSON } from '../../api.ts'
 import MeetPanel from '../connect/MeetPanel.tsx'
+import { WHY_BASIS } from '../groups/fields.ts'
+import type { Basis } from '../groups/types.ts'
 import type { Meeting } from '../connect/types.ts'
 import { dayLabel, hhmm } from '../schedule/time.ts'
 import Avatar from './Avatar.tsx'
@@ -18,9 +20,20 @@ type Props = {
   meeting?: Meeting
   onRequested?: (meeting: Meeting) => void
   onWithdrawn?: (personId: string) => void
+  /** Offer a meetup for the first shared school, community, company or interest (Groups tab). */
+  onPropose?: (basis: Basis, value: string) => void
 }
 
-export default function PersonCard({ person, onWhy, userId, request, meeting, onRequested, onWithdrawn }: Props) {
+export default function PersonCard({
+  person,
+  onWhy,
+  userId,
+  request,
+  meeting,
+  onRequested,
+  onWithdrawn,
+  onPropose,
+}: Props) {
   const role = [person.title, person.company].filter(Boolean).join(' · ')
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState<Meeting | null>(null)
@@ -31,6 +44,7 @@ export default function PersonCard({ person, onWhy, userId, request, meeting, on
   const isRequested = pending !== null
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawFailed, setWithdrawFailed] = useState(false)
+  const shared = person.why.find((w) => WHY_BASIS[w.field])
 
   const withdraw = async () => {
     if (!pending) return
@@ -143,6 +157,16 @@ export default function PersonCard({ person, onWhy, userId, request, meeting, on
               )
             })}
           </ul>
+        )}
+        {onPropose && shared && (
+          <button
+            type="button"
+            className="link-button person-propose"
+            onClick={() => onPropose(WHY_BASIS[shared.field]!, shared.value)}
+          >
+            <Plus size={13} aria-hidden="true" />
+            Propose {/^[aeio]/i.test(shared.value) ? 'an' : 'a'} {shared.value} meetup
+          </button>
         )}
         {open && !isRequested && (
           <MeetPanel id={panelId} userId={userId} person={person} onSent={onSent} onClose={close} />

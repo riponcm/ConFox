@@ -27,6 +27,8 @@ export type Meeting = {
   session_id?: string
   message?: string
   sample?: boolean
+  /** Set on a confirmed group meetup (Groups); with_id is then the group id and with_name its title. */
+  group_id?: string
 }
 
 /** GET /api/connect */
