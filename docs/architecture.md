@@ -184,9 +184,31 @@ The UI labels every transcript "Sample transcript (generated)"; on a talk page t
 
 For you stays short because you can only be in one room: agenda items, keynotes and food always stay; among other picks that start at the same time, the best one stays, plus a second only when its fit is 0.75 or more (a title or project match). The rest keep their reasons and show in Everything. Without vectors, the rules alone decide and `semantic` is false.
 
-Clashes list confirmed agenda items that overlap a session. A full-day co-located event on the agenda is left out, or every session that day would clash; breaks and co-located sessions never show clashes (a meeting over coffee happens at the break). Pending requests never clash.
+Clashes list confirmed agenda items that overlap a session. A full-day co-located event on the agenda is left out, or every session that day would clash; breaks never show clashes (a meeting over coffee happens at the break). Pending requests never clash. The `clashes()` helper still skips co-located sessions; the day endpoint adds what a co-located event overlaps on top (`overlap_labels`), so the 09:00 co-located days show "overlaps Coffee with Alice Moreno".
 
-The page (`src/pages/Schedule.tsx`, `src/components/schedule/`) has day tabs from Monday, a debounced search box over `GET /api/search` (results replace the day view and show the search mode and time; if search is missing it says so and keeps the day view), a For you / Everything toggle with a count, time blocks where runs of other sessions fold into "N more sessions", meetings and pending requests in their slot, and a "now" line from `/api/meta`. Times are read from the strings, never converted through the browser's time zone.
+The day response also carries (added fields only; everything above is unchanged):
+
+| Field | Meaning |
+|---|---|
+| `sessions[].going` | Other attendees who saved the session (confirmed agenda sessions, the user left out) |
+| `sessions[].going_names` | Up to 3 of the user's people among them: confirmed meeting partners (any day) first, then the top 10 Match results (same query as `/api/people/match`, vector when present) |
+| `summary` | `{for_you, total, on_agenda}` for the day |
+| `facets` | `{kind, track, level, venue: [{key, count}]}` over the day's sessions, most common first |
+| `interests` | The profile's interests then projects, deduplicated: the keyword chips |
+
+Going costs two requests on top of the day: the Match query (names, size 10) and one `confox-agenda` aggregation, `terms` on `session_id` with a `cardinality` of `user_id` and a `terms` on `user_id` filtered to the user's people. If either fails the day still loads (logged and recorded on the span) with zero going. The request span carries `confox.schedule.friends` and `confox.schedule.friends_going`. The rules are pure functions in `routers/schedule.py` (`friends`, `going_body`, `parse_going`, `day_extras`, `summary`, `day_facets`, `profile_chips`), tested in `tests/test_schedule_day.py`. The 363 saved sessions of the 80 sample attendees are generated sample data and labelled so on the page.
+
+The page (`src/pages/Schedule.tsx`, `src/components/schedule/`) has:
+
+- **Header**: "Schedule" and a muted line "Mon, Nov 9 · 15 of 76 for you · 1 on your agenda" from `summary`.
+- **Toolbar** (one row, wraps on phones): the debounced search box over `GET /api/search` (results replace the day view and show the search mode and time; if search is missing it says so and keeps the day view), For you / Everything, day pills Mon to Thu (a dot marks today), From now / Whole day (From now hides sessions and meetings that have ended; the default is From now today and Whole day on other days), a Filters button with the active count, and Sort.
+- **Filters panel**: checkbox groups built from `facets` (Kind, Track, Level, Venue, with counts) and the toggles On my agenda, Friends going (`going_names` not empty) and No clashes (sessions on the agenda always stay); Clear and Done. Filters apply in the browser to the loaded day; meetings and requests always stay.
+- **Interest chips**: `interests` with a sparkle icon; each toggles a keyword filter (whole words, any case, in title, track, projects or description, like the API's rule; several chips match any). "From your profile · edit" opens the profile drawer through the shell's outlet context (`components/shellContext.ts`).
+- **Sort**: Time (default) is the day view below; Best match (`fit`) and Most going (`going`, fit breaks ties) are one ranked list with each row's time, the rest folded in For you.
+- **Day view**: blocks by start time with a mono time column and the slot length ("510 min", or a range). A slot with 2+ sessions shown gets "2 in parallel · 1 on your agenda", a green "decided" chip when one is on the agenda, and Compare: a native modal dialog with one column per session (time, room, track, level, length, why, who is going, clash, and Add to agenda). Rows show a kind icon, title, short room, length, level, and chips for the track, why, going ("Zara going", "Alice +2 going", "3 going") and overlaps (warn colour). Runs of other sessions fold into "2 more at this time not matching your interests · Show" or "11 more in this stretch (09:00–09:54) …". Meetings, pending requests and the "now" line stay.
+- **URL state**: `?day=&view=all&from=now|day&sort=fit|going&kind=&track=&level=&venue=&mine=1&friends=1&noclash=1&topic=&q=` (repeatable values, defaults left out), so a reload or a shared link shows the same view.
+
+Times are read from the strings, never converted through the browser's time zone.
 
 ## Agenda and Meet (pull request 7 and 11)
 

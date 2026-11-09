@@ -46,3 +46,35 @@ export function kindLabel(kind: string, isFood?: boolean): string {
   if (kind === 'break' && isFood) return 'Food and coffee'
   return KIND_LABELS[kind] ?? kind
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const WEEKDAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
+  'October', 'November', 'December']
+
+function parts(day: string): { weekday: number; month: number; date: number } {
+  const [y, m, d] = day.split('-').map(Number)
+  return { weekday: new Date(Date.UTC(y, m - 1, d)).getUTCDay(), month: m - 1, date: d }
+}
+
+/** "2026-11-09" -> "Mon" */
+export function weekday(day: string): string {
+  return WEEKDAYS[parts(day).weekday]
+}
+
+/** "2026-11-09" -> "Mon, Nov 9" */
+export function shortDate(day: string): string {
+  const p = parts(day)
+  return `${WEEKDAYS[p.weekday]}, ${MONTHS[p.month]} ${p.date}`
+}
+
+/** "2026-11-09" -> "Monday 9 November", for screen readers. */
+export function longDate(day: string): string {
+  const p = parts(day)
+  return `${WEEKDAYS_LONG[p.weekday]} ${p.date} ${MONTHS_LONG[p.month]}`
+}
+
+/** Length in minutes, from the strings (the loader's `minutes` when present). */
+export function durationMin(s: { starts_at: string; ends_at: string; minutes?: number }): number {
+  return s.minutes ?? Math.max(0, minutes(s.ends_at) - minutes(s.starts_at))
+}

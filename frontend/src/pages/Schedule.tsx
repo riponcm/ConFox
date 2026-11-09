@@ -1,10 +1,25 @@
 import { useEffect, useState } from 'react'
-import { LoaderCircle, Search, X } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
+import { useSearchParams } from 'react-router'
 import { ApiError, deleteJSON, getJSON, postJSON } from '../api.ts'
+import { useOpenProfile } from '../components/shellContext.ts'
 import DayView from '../components/schedule/DayView.tsx'
+import FilterPanel from '../components/schedule/FilterPanel.tsx'
+import InterestChips from '../components/schedule/InterestChips.tsx'
 import SearchResults from '../components/schedule/SearchResults.tsx'
-import { dayLabel } from '../components/schedule/time.ts'
+import Toolbar from '../components/schedule/Toolbar.tsx'
+import { shortDate } from '../components/schedule/time.ts'
 import type { ToggleAgenda } from '../components/schedule/agenda.ts'
+import {
+  anyFilter,
+  applyFilters,
+  NO_FILTERS,
+  panelCount,
+  parseState,
+  toParams,
+  type Filters,
+  type ScheduleState,
+} from '../components/schedule/filters.ts'
 import type {
   AgendaResponse,
   DayResponse,
@@ -19,7 +34,7 @@ const FIRST_DAY = '2026-11-09'
 const DEBOUNCE_MS = 300
 
 // Each answer remembers the request it belongs to; anything else is still loading. No state is set inside
-// effects except from responses.
+// effects except from responses (and the debounced search text, which goes to the URL).
 type Answer<T> = { key: string; data?: T; failed?: boolean }
 type Load<T> = { status: 'loading' | 'error' | 'empty' } | { status: 'ready'; data: T }
 type SearchState = { status: 'idle' | 'loading' | 'unavailable' } | { status: 'ready'; data: SearchResponse }
@@ -30,22 +45,34 @@ async function loadAgendaIds(userId: string, signal?: AbortSignal): Promise<Set<
 }
 
 export default function Schedule() {
+  const [params, setParams] = useSearchParams()
+  const state = parseState(params)
+  const update = (change: Partial<ScheduleState>) =>
+    setParams((prev) => toParams({ ...parseState(prev), ...change }), { replace: true })
+  const setFilters = (filters: Filters) => update({ filters })
+  const openProfile = useOpenProfile()
+
   const [meta, setMeta] = useState<Meta | null>(null)
   const [days, setDays] = useState<string[]>([])
-  const [day, setDay] = useState<string | null>(null)
-  const [forYouOnly, setForYouOnly] = useState(true)
   const [dayAnswer, setDayAnswer] = useState<Answer<DayResponse> | null>(null)
   const [setupFailed, setSetupFailed] = useState(false)
   const [noDays, setNoDays] = useState(false)
-  const [query, setQuery] = useState('')
-  const [debounced, setDebounced] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  // The box updates at once; the URL (and so the search) follows after a pause in typing.
+  const [query, setQuery] = useState(state.q)
+  const debounced = state.q
   const [searchAnswer, setSearchAnswer] = useState<Answer<SearchResponse> | null>(null)
-  const searchKey = `${debounced}|${day ?? ''}`
   // Session ids on the agenda, for search results (the day view gets `on_agenda` from the API).
   const [agendaIds, setAgendaIds] = useState<Set<string>>(new Set())
   const [agendaFailed, setAgendaFailed] = useState(false)
 
-  // Who and when, plus the day tabs. Default to today if the conference is on.
+  const today = meta?.now.slice(0, 10) ?? ''
+  // The URL's day when it is one of the conference days; else today if the conference is on, else the first day.
+  const day = state.day && days.includes(state.day) ? state.day : days.includes(today) ? today : (days[0] ?? null)
+  // From now applies to today only; on other days the whole day is shown and the toggle is hidden.
+  const from = day === today ? (state.from ?? 'now') : 'day'
+  const searchKey = `${debounced}|${day ?? ''}`
+
   useEffect(() => {
     let live = true
     Promise.all([getJSON<Meta>('meta'), getJSON<DaysResponse>('schedule/days')])
@@ -55,8 +82,6 @@ export default function Schedule() {
         setMeta(m)
         setDays(list)
         setNoDays(list.length === 0)
-        const today = m.now.slice(0, 10)
-        setDay(list.includes(today) ? today : (list[0] ?? null))
       })
       .catch(() => live && setSetupFailed(true))
     return () => {
@@ -108,9 +133,14 @@ export default function Schedule() {
   }
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS)
+    const q = query.trim()
+    if (q === debounced) return
+    const t = setTimeout(
+      () => setParams((prev) => toParams({ ...parseState(prev), q }), { replace: true }),
+      DEBOUNCE_MS,
+    )
     return () => clearTimeout(t)
-  }, [query])
+  }, [query, debounced, setParams])
 
   useEffect(() => {
     if (!debounced) return
@@ -144,29 +174,68 @@ export default function Schedule() {
         : { status: 'unavailable' }
 
   const showResults = debounced !== '' && (search.status === 'ready' || search.status === 'loading')
-  const sessions = view.status === 'ready' ? view.data.sessions : []
-  const forYouCount = sessions.filter((s) => s.for_you).length
+  const data = view.status === 'ready' ? view.data : null
+  const filters = state.filters
+  const filtered = data ? applyFilters(data, filters, from === 'now' && day === today) : null
+  const narrowed = anyFilter(filters) || (from === 'now' && day === today)
+  const summary = data?.summary ?? {
+    for_you: data?.sessions.filter((s) => s.for_you).length ?? 0,
+    total: data?.sessions.length ?? 0,
+    on_agenda: data?.sessions.filter((s) => s.on_agenda).length ?? 0,
+  }
+  const shownCount = filtered
+    ? filtered.sessions.filter((s) => state.view === 'all' || s.for_you).length
+    : 0
+  const toggleTopic = (topic: string) =>
+    setFilters({
+      ...filters,
+      topics: filters.topics.includes(topic) ? filters.topics.filter((t) => t !== topic) : [...filters.topics, topic],
+    })
 
   return (
     <section className="page sch-page" aria-labelledby="page-title">
-      <h1 id="page-title">Schedule</h1>
-
-      <div className="sch-search" role="search">
-        <Search size={16} className="sch-search-icon" aria-hidden="true" />
-        <input
-          type="search"
-          className="sch-search-input"
-          placeholder="Search talks, e.g. cheap LLM inference on GPUs"
-          aria-label="Search sessions"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        {query && (
-          <button type="button" className="icon-button sch-search-clear" aria-label="Clear search" onClick={() => setQuery('')}>
-            <X size={16} aria-hidden="true" />
-          </button>
+      <div className="sch-head">
+        <h1 id="page-title">Schedule</h1>
+        {day && data && (
+          <p className="sch-summary">
+            <time dateTime={day}>{shortDate(day)}</time>
+            <span>
+              {summary.for_you} of {summary.total} for you
+            </span>
+            <span>{summary.on_agenda} on your agenda</span>
+            {data.semantic && <span>semantic</span>}
+          </p>
         )}
       </div>
+
+      <Toolbar
+        query={query}
+        onQuery={setQuery}
+        view={state.view}
+        onView={(v) => update({ view: v })}
+        days={days}
+        day={day}
+        today={today}
+        onDay={(d) => update({ day: d, from: null })}
+        from={from}
+        onFrom={(f) => update({ from: f })}
+        filterCount={panelCount(filters)}
+        filtersOpen={filtersOpen}
+        onToggleFilters={() => setFiltersOpen(!filtersOpen)}
+        sort={state.sort}
+        onSort={(s) => update({ sort: s })}
+      />
+
+      {filtersOpen && (
+        <FilterPanel
+          facets={data?.facets}
+          filters={filters}
+          onChange={setFilters}
+          onClear={() => setFilters({ ...NO_FILTERS, topics: filters.topics })}
+          onClose={() => setFiltersOpen(false)}
+        />
+      )}
+
       {search.status === 'unavailable' && <p className="sch-note">Search is not available yet</p>}
       {agendaFailed && (
         <p className="sch-note sch-agenda-error" role="alert">
@@ -174,29 +243,12 @@ export default function Schedule() {
         </p>
       )}
 
-      {days.length > 0 && (
-        <div className="sch-days" aria-label="Day">
-          {days.map((d) => (
-            <button
-              key={d}
-              type="button"
-              className="sch-day-tab"
-              aria-pressed={d === day}
-              onClick={() => setDay(d)}
-            >
-              {dayLabel(d)}
-              {meta && meta.now.slice(0, 10) === d && <span className="sch-today">Today</span>}
-            </button>
-          ))}
-        </div>
-      )}
-
       {showResults ? (
         search.status === 'ready' ? (
           <SearchResults
             data={search.data}
             day={day ?? ''}
-            onPickDay={setDay}
+            onPickDay={(d) => update({ day: d, from: null })}
             agendaIds={agendaIds}
             onToggleAgenda={meta ? toggleAgenda : undefined}
           />
@@ -208,31 +260,46 @@ export default function Schedule() {
         )
       ) : (
         <>
-          <div className="sch-toolbar">
-            <div className="sch-toggle" role="group" aria-label="Show">
-              <button type="button" aria-pressed={forYouOnly} onClick={() => setForYouOnly(true)}>
-                For you
-              </button>
-              <button type="button" aria-pressed={!forYouOnly} onClick={() => setForYouOnly(false)}>
-                Everything
-              </button>
-            </div>
-            {view.status === 'ready' && (
-              <p className="sch-count">
-                {forYouCount} for you of {sessions.length}
-                {view.data.semantic && <span className="sch-muted"> &middot; semantic</span>}
-              </p>
-            )}
-          </div>
+          {data && (
+            <InterestChips
+              interests={data.interests ?? []}
+              selected={filters.topics}
+              onToggle={toggleTopic}
+              onEdit={openProfile}
+            />
+          )}
+          {filtered && narrowed && (
+            <p className="sch-note sch-showing" role="status">
+              <span>
+                Showing {shownCount} {state.view === 'all' ? '' : 'for you '}
+                {shownCount === 1 ? 'session' : 'sessions'}
+                {from === 'now' && day === today && ' from now'}
+              </span>
+              {anyFilter(filters) && (
+                <button type="button" className="sch-link" onClick={() => setFilters(NO_FILTERS)}>
+                  Clear filters
+                </button>
+              )}
+            </p>
+          )}
 
           {view.status === 'loading' && <p className="sch-note">Loading the schedule&hellip;</p>}
           {view.status === 'error' && <p className="sch-note">Could not load the schedule. Is the API running?</p>}
           {view.status === 'empty' && (
             <p className="sch-note">No schedule is loaded yet. Run the data loader (see the README) and reload.</p>
           )}
-          {view.status === 'ready' && <DayView data={view.data} forYouOnly={forYouOnly} onToggleAgenda={toggleAgenda} />}
-          {view.status === 'ready' && (view.data.meetings.length > 0 || view.data.pending.length > 0) && (
-            <p className="sample-note">Meetings and agenda items are generated sample data.</p>
+          {filtered && (
+            <DayView
+              data={filtered}
+              forYouOnly={state.view === 'foryou'}
+              sort={state.sort}
+              onToggleAgenda={toggleAgenda}
+            />
+          )}
+          {data && (
+            <p className="sample-note">
+              Meetings, agenda items and who is going are generated sample data.
+            </p>
           )}
         </>
       )}
