@@ -23,6 +23,16 @@
   --shadow: 0 12px 32px rgba(5, 6, 18, 0.45);
   --focus: #b3b8ff;
 
+  /* Charts: categorical slots in fixed order, validated for colour-vision deficiency on --panel. */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-grid: rgba(255, 255, 255, 0.07);
+  --chart-axis: rgba(255, 255, 255, 0.22);
+  --chart-now: #ffe9d6;
+
   --topbar-h: 56px;
   --rail-w: 220px;
   --bottombar-h: 60px;
