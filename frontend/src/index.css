@@ -286,7 +286,7 @@ time, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
     border-right: 0;
     border-top: 1px solid var(--line);
   }
-  .rail-primary { flex: 5; flex-direction: row; }
+  .rail-primary { flex: 4; flex-direction: row; } /* four primary tabs, then More */
   .rail-primary > li, .rail-more { flex: 1; min-width: 0; }
   .rail-divider, .rail-secondary { display: none; }
   .rail-more { display: block; }
