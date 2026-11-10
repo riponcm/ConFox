@@ -106,6 +106,10 @@
   font-size: 12.5px;
 }
 .dash-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.dash-legend + .dash-legend { margin-top: -2px; color: var(--muted); }
+.dash-legend li.is-zero { opacity: 0.45; }
+.dash-legend-n { color: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dash-tick-time { font-family: var(--mono); font-size: 10.5px; }
 
 .dash-plot { position: relative; width: 100%; min-height: 206px; border-radius: 8px; touch-action: pan-y; }
 .dash-plot svg { display: block; overflow: visible; }

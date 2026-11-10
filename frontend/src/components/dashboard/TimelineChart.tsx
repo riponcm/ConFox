@@ -1,6 +1,15 @@
 import { useId, useState } from 'react'
 import { useWidth } from './useWidth.ts'
-import { type DashboardData, type TimelineBucket, fmt, hhmm, hhmmFromMinutes, hourShort, minutesOf } from './types.ts'
+import {
+  type DashboardData,
+  KIND_GROUPS,
+  type KindGroup,
+  type TimelineBucket,
+  fmt,
+  hhmm,
+  hhmmFromMinutes,
+  minutesOf,
+} from './types.ts'
 
 const PLOT_H = 160
 const TOP = 22 // room for the agenda dots and the now label
@@ -24,19 +33,30 @@ function topRounded(x: number, y: number, w: number, h: number, r: number): stri
   return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`
 }
 
-const startText = (b: TimelineBucket) =>
-  `${b.total === 1 ? '1 session starts' : `${fmt(b.total)} sessions start`} at ${hhmm(b.start)}`
+/** Stacking order, bottom up, with the chart token each kind wears. */
+const KINDS: Record<KindGroup, { label: string; color: string }> = {
+  talks: { label: 'Talks', color: 'var(--chart-1)' },
+  keynotes: { label: 'Keynotes', color: 'var(--chart-2)' },
+  colocated: { label: 'Co-located', color: 'var(--chart-3)' },
+  food: { label: 'Breaks and food', color: 'var(--chart-4)' },
+  other: { label: 'Other', color: 'var(--chart-5)' },
+}
 
-/** Sessions starting per half hour: one colour, past half hours lighter, the user's agenda as dots, a now line. */
+const endText = (b: TimelineBucket, interval: number) => hhmmFromMinutes(minutesOf(b.start) + interval)
+
+const startText = (b: TimelineBucket, interval: number) =>
+  `${fmt(b.total)} starting ${hhmm(b.start)} to ${endText(b, interval)}`
+
+/** Sessions starting per half hour, stacked by kind; past half hours lighter, the user's agenda as dots, a now line. */
 export default function TimelineChart({ data }: { data: DashboardData }) {
-  const { buckets, interval_minutes: interval } = data.timeline
+  const { buckets, interval_minutes: interval, kind_totals: kindTotals } = data.timeline
   const [wrapRef, width] = useWidth<HTMLDivElement>()
   const [active, setActive] = useState<number | null>(null)
   const titleId = useId()
   const descId = useId()
 
   const n = buckets.length
-  const peak = buckets.reduce((best, b) => (b.total > best.total ? b : best), buckets[0] ?? { start: '', total: 0, mine: 0 })
+  const peak = buckets.reduce((best, b) => (b.total > best.total ? b : best), buckets[0] ?? { start: '', total: 0, mine: 0, kinds: kindTotals })
   const dayTotal = buckets.reduce((sum, b) => sum + b.total, 0)
   const mineTotal = buckets.reduce((sum, b) => sum + b.mine, 0)
 
@@ -59,9 +79,9 @@ export default function TimelineChart({ data }: { data: DashboardData }) {
   const nowX = xOfMinutes(nowMin)
   const isPast = (b: TimelineBucket) => data.is_today && (nowMin > last || minutesOf(b.start) + interval <= nowMin)
 
-  // Even hours inside the window: 8a 10a 12p 2p 4p 6p.
+  // Every second hour from the first half hour: 07:00, 09:00, 11:00 ...
   const hourTicks: number[] = []
-  for (let m = Math.ceil(first / 120) * 120; m < last; m += 120) if (m > first) hourTicks.push(m)
+  for (let m = first; m < last; m += 120) hourTicks.push(m)
 
   const indexAt = (clientX: number, el: Element) => {
     const x = clientX - el.getBoundingClientRect().left - LEFT
@@ -86,11 +106,23 @@ export default function TimelineChart({ data }: { data: DashboardData }) {
   const tipLeft = active === null ? 0 : Math.min(Math.max(LEFT + (active + 0.5) * band, 90), width - 90)
   const nowIndex = showNow ? Math.min(n - 1, Math.floor((nowMin - first) / interval)) : 0
   const readout = activeBucket
-    ? `${startText(activeBucket)}${activeBucket.mine ? `, ${activeBucket.mine} on your agenda` : ''}`
+    ? `${startText(activeBucket, interval)}: ${KIND_GROUPS.filter((k) => activeBucket.kinds[k] > 0)
+        .map((k) => `${activeBucket.kinds[k]} ${KINDS[k].label}`)
+        .join(', ')}${activeBucket.mine ? `. ${activeBucket.mine} on your agenda` : ''}`
     : ''
 
   return (
     <div className="dash-timeline">
+      <ul className="dash-legend" aria-label="Session kinds">
+        {KIND_GROUPS.map((k) => (
+          <li key={k} className={kindTotals[k] === 0 ? 'is-zero' : undefined}>
+            <svg width="10" height="10" aria-hidden="true">
+              <rect width="10" height="10" rx="2" fill={KINDS[k].color} />
+            </svg>
+            {KINDS[k].label} <span className="dash-legend-n">{fmt(kindTotals[k])}</span>
+          </li>
+        ))}
+      </ul>
       {(showNow || mineTotal > 0) && (
         <ul className="dash-legend" aria-label="Chart marks">
           {mineTotal > 0 && (
@@ -157,15 +189,23 @@ export default function TimelineChart({ data }: { data: DashboardData }) {
             {buckets.map((b, i) => {
               const x = LEFT + i * band + (band - barW) / 2
               const top = y(b.total)
+              const shown = KIND_GROUPS.filter((k) => b.kinds[k] > 0)
+              const topKind = shown[shown.length - 1]
+              let base = TOP + PLOT_H
               return (
                 <g key={b.start}>
-                  {b.total > 0 && (
-                    <path
-                      d={topRounded(x, top, barW, TOP + PLOT_H - top, RADIUS)}
-                      fill="var(--accent)"
-                      fillOpacity={isPast(b) ? 0.38 : 1}
-                    />
-                  )}
+                  <g opacity={isPast(b) ? 0.45 : 1}>
+                    {shown.map((k) => {
+                      const h = (b.kinds[k] / yMax) * PLOT_H
+                      const segTop = base - h
+                      const d =
+                        k === topKind
+                          ? topRounded(x, segTop, barW, h, RADIUS)
+                          : `M${x},${segTop}H${x + barW}V${base}H${x}Z`
+                      base = segTop
+                      return <path key={k} d={d} fill={KINDS[k].color} stroke="var(--panel)" strokeWidth={1} />
+                    })}
+                  </g>
                   {b.mine > 0 && (
                     <circle
                       cx={x + barW / 2}
@@ -181,8 +221,8 @@ export default function TimelineChart({ data }: { data: DashboardData }) {
             })}
 
             {hourTicks.map((m) => (
-              <text key={m} x={xOfMinutes(m)} y={TOP + PLOT_H + 16} textAnchor="middle" className="dash-tick">
-                {hourShort(m)}
+              <text key={m} x={xOfMinutes(m)} y={TOP + PLOT_H + 16} textAnchor="middle" className="dash-tick dash-tick-time">
+                {hhmmFromMinutes(m)}
               </text>
             ))}
 
@@ -203,9 +243,17 @@ export default function TimelineChart({ data }: { data: DashboardData }) {
         {activeBucket && (
           <div className="dash-tip" style={{ left: tipLeft }} aria-hidden="true">
             <p>
-              <strong>{fmt(activeBucket.total)}</strong> {activeBucket.total === 1 ? 'session starts' : 'sessions start'}{' '}
-              at {hhmm(activeBucket.start)}
+              <strong>{fmt(activeBucket.total)}</strong> starting {hhmm(activeBucket.start)} to{' '}
+              {endText(activeBucket, interval)}
             </p>
+            {KIND_GROUPS.filter((k) => activeBucket.kinds[k] > 0).map((k) => (
+              <p key={k} className="dash-tip-row">
+                <svg width="8" height="8" aria-hidden="true">
+                  <rect width="8" height="8" rx="2" fill={KINDS[k].color} />
+                </svg>
+                {activeBucket.kinds[k]} {KINDS[k].label}
+              </p>
+            ))}
             {activeBucket.mine > 0 && (
               <p className="dash-tip-row">
                 <svg width="8" height="8" aria-hidden="true">
@@ -229,6 +277,11 @@ export default function TimelineChart({ data }: { data: DashboardData }) {
             <tr>
               <th scope="col">Half hour</th>
               <th scope="col">Sessions starting</th>
+              {KIND_GROUPS.map((k) => (
+                <th key={k} scope="col">
+                  {KINDS[k].label}
+                </th>
+              ))}
               <th scope="col">On your agenda</th>
             </tr>
           </thead>
@@ -237,6 +290,9 @@ export default function TimelineChart({ data }: { data: DashboardData }) {
               <tr key={b.start}>
                 <th scope="row">{hhmm(b.start)}</th>
                 <td>{b.total}</td>
+                {KIND_GROUPS.map((k) => (
+                  <td key={k}>{b.kinds[k]}</td>
+                ))}
                 <td>{b.mine}</td>
               </tr>
             ))}

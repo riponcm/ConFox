@@ -15,7 +15,10 @@ Next coffee and what is on now stay on `GET /api/now`.
       "sessions": {"total": 600, "day": 78},
       "timeline": {
         "interval_minutes": 30,
-        "buckets": [{"start": "2026-11-09T07:00:00", "total": 2, "mine": 0}, ...]   # mine: user's confirmed items
+        "buckets": [{"start": "2026-11-09T07:00:00", "total": 2, "mine": 0,
+                     "kinds": {"talks": 2, "keynotes": 0, "colocated": 0, "food": 0, "other": 0}}, ...],
+                                             # mine: user's confirmed items; kinds sum to total
+        "kind_totals": {"talks": 50, "keynotes": 0, "colocated": 23, "food": 3, "other": 2}   # the day
       },
       "tracks": [{"name": "Project Lightning Talks", "sessions": 51}, ...],          # top 6 on the day
       "filling": [{"id": "1289760", "title": "...", "starts_at": "...", "room": "...", "going": 5}],
@@ -69,6 +72,11 @@ MY_ITEMS = 50
 # Salt Lake City hosts: the local university leads the alumni list (review rule), the rest follow by count.
 HOST_SCHOOL = "University of Utah"
 
+# Session kinds folded into the five groups the timeline chart stacks, in stacking order. Food (`is_food` or a
+# break) wins over the kind; anything not listed (registration, ...) is "other".
+KIND_GROUPS = ("talks", "keynotes", "colocated", "food", "other")
+TALK_KINDS = {"talk", "lightning", "tutorial", "contribfest", "poster", "showcase"}
+
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 
@@ -104,6 +112,9 @@ def _histogram(field: str, day: str) -> dict:
     }
 
 
+FOOD_FILTER = {"filter": {"term": {"is_food": True}}}
+
+
 def sessions_body(day: str) -> dict:
     """Sessions: the week by day, then the day's timeline and tracks under a filter."""
     return {
@@ -115,7 +126,10 @@ def sessions_body(day: str) -> dict:
                 "filter": {"term": {"day": day}},
                 "aggs": {
                     "tracks": {"terms": {"field": "track", "size": TOP}},
-                    "timeline": _histogram("starts_at", day),
+                    "timeline": {
+                        **_histogram("starts_at", day),
+                        "aggs": {"kinds": {"terms": {"field": "kind", "size": 30}, "aggs": {"food": FOOD_FILTER}}},
+                    },
                 },
             },
         },
@@ -298,6 +312,27 @@ def mine_per_bucket(starts: list[str], items: list[dict]) -> list[int]:
     return counts
 
 
+def kind_group(kind: str) -> str:
+    """The chart group of a session kind that is not food."""
+    if kind in TALK_KINDS:
+        return "talks"
+    if kind == "keynote":
+        return "keynotes"
+    if kind == "colocated":
+        return "colocated"
+    return "other"
+
+
+def kinds_in_bucket(bucket: dict) -> dict[str, int]:
+    """Counts per chart group for one histogram bucket (kinds terms, each with its `is_food` count)."""
+    out = dict.fromkeys(KIND_GROUPS, 0)
+    for k in bucket.get("kinds", {}).get("buckets", []):
+        food = k["doc_count"] if k["key"] == "break" else k.get("food", {}).get("doc_count", 0)
+        out["food"] += food
+        out[kind_group(k["key"])] += k["doc_count"] - food
+    return out
+
+
 def shape_activity(day_agg: dict, searches: dict, now: datetime, is_today: bool) -> dict:
     buckets = [{"start": b["key_as_string"], "count": b["doc_count"]} for b in day_agg["timeline"]["buckets"]]
     if is_today:  # the future has no activity yet: stop at the half hour that holds now, not at a row of zeros
@@ -318,6 +353,8 @@ def shape(day: str, now: datetime, sessions: dict, people: dict, agenda: dict, a
     mine = [h["_source"] for h in a["mine"]["items"]["hits"]["hits"]]
     histogram = s["day"]["timeline"]["buckets"]
     per_bucket = mine_per_bucket([b["key_as_string"] for b in histogram], mine)
+    per_kind = [kinds_in_bucket(b) for b in histogram]
+    kind_totals = {g: sum(k[g] for k in per_kind) for g in KIND_GROUPS}
     kinds = {b["key"]: b["doc_count"] for b in p["kinds"]["buckets"]}
     att = p["attendees"]
     filling = []
@@ -341,9 +378,10 @@ def shape(day: str, now: datetime, sessions: dict, people: dict, agenda: dict, a
         "timeline": {
             "interval_minutes": INTERVAL_MINUTES,
             "buckets": [
-                {"start": b["key_as_string"], "total": b["doc_count"], "mine": n}
-                for b, n in zip(histogram, per_bucket, strict=True)
+                {"start": b["key_as_string"], "total": b["doc_count"], "mine": n, "kinds": k}
+                for b, n, k in zip(histogram, per_bucket, per_kind, strict=True)
             ],
+            "kind_totals": kind_totals,
         },
         "tracks": [{"name": b["key"], "sessions": b["doc_count"]} for b in s["day"]["tracks"]["buckets"]],
         "filling": filling,

@@ -158,7 +158,7 @@ export default function Dashboard() {
               <BarChart3 size={16} aria-hidden="true" />
               {data.is_today ? 'Today at a glance' : `${dayLabel(data.day)} at a glance`}
             </h2>
-            <p className="dash-card-sub">Sessions starting each half hour.</p>
+            <p className="dash-card-sub">Sessions starting each half hour, by kind.</p>
             <TimelineChart data={data} />
           </article>
 
