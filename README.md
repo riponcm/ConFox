@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="#demo">Demo video</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#how-your-profile-drives-elasticsearch">How matching works</a> ·
   <a href="#hackathon-tracks">Tracks</a> ·
@@ -45,6 +46,24 @@
 </p>
 
 ---
+
+## Demo
+
+https://github.com/user-attachments/assets/7ff1a1a1-e04d-4bf6-ab71-c2bd8106e5da
+
+### Explore the app
+
+Follow Emma, a platform engineer and University of Utah alumna, at 08:40 on Monday 9 November:
+
+1. **Dashboard**: the conference pulse, every number an Elasticsearch aggregation.
+2. **Edit profile** (avatar, top right): add an interest or a university and save; People and For you re-rank.
+3. **Schedule**: search "running LLM inference cheaply on GPUs", switch For you / Everything, open any session for speakers and similar talks, Compare the 09:00 slot.
+4. **People**: Match ranks people by what you share and says why; Meet at a free break; Groups to propose or join a University of Utah meetup.
+5. **Now** and **My brief**: where to be next, and your day in one page.
+6. **Catch up**: a missed keynote as summary, takeaways and Q&A.
+7. **Ask**: "Who should I meet about GPU scheduling?" cites sessions and people.
+
+To run it yourself, see [Run it locally](#run-it-locally).
 
 ## Why
 
