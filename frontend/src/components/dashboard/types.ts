@@ -1,6 +1,9 @@
 /** Shape of GET /api/dashboard (see backend/app/routers/dashboard.py). */
 
-export type TimelineBucket = { start: string; total: number; mine: number }
+export const KIND_GROUPS = ['talks', 'keynotes', 'colocated', 'food', 'other'] as const
+export type KindGroup = (typeof KIND_GROUPS)[number]
+export type KindCounts = Record<KindGroup, number>
+export type TimelineBucket = { start: string; total: number; mine: number; kinds: KindCounts }
 export type Named = { name: string; count: number; pinned?: boolean }
 
 export type DashboardData = {
@@ -9,7 +12,7 @@ export type DashboardData = {
   is_today: boolean
   days: { day: string; sessions: number }[]
   sessions: { total: number; day: number }
-  timeline: { interval_minutes: number; buckets: TimelineBucket[] }
+  timeline: { interval_minutes: number; buckets: TimelineBucket[]; kind_totals: KindCounts }
   tracks: { name: string; sessions: number }[]
   filling: { id: string; title: string; starts_at: string; room: string; going: number }[]
   my_day: { hours: number; goal_hours: number; sessions: number; meetings: number; requests: number }
@@ -39,12 +42,6 @@ export const minutesOf = (iso: string) => Number(iso.slice(11, 13)) * 60 + Numbe
 
 export const hhmmFromMinutes = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-
-/** 480 -> "8a", 720 -> "12p": compact hour labels for a time axis. */
-export function hourShort(m: number): string {
-  const h = Math.floor(m / 60)
-  return `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`
-}
 
 /** "2026-11-09" -> "Mon 9" or "Monday, Nov 9". Noon avoids any date shift from the browser's own time zone. */
 export function dayLabel(day: string, style: 'short' | 'long' = 'short'): string {

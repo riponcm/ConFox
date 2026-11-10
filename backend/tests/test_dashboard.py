@@ -32,6 +32,9 @@ def test_sessions_body_scopes_the_day():
     assert hist["min_doc_count"] == 0
     assert hist["extended_bounds"] == {"min": "2026-11-09T07:00:00", "max": "2026-11-09T18:59:00"}
     assert hist["hard_bounds"] == {"min": "2026-11-09T07:00:00", "max": "2026-11-09T19:00:00"}
+    kinds = day["aggs"]["timeline"]["aggs"]["kinds"]
+    assert kinds["terms"]["field"] == "kind"
+    assert kinds["aggs"]["food"] == {"filter": {"term": {"is_food": True}}}
 
 
 def test_people_body_looks_at_attendees_and_counts_the_host_school():
@@ -121,6 +124,24 @@ def _hist(*pairs):
     return {"buckets": [{"key_as_string": k, "doc_count": n} for k, n in pairs]}
 
 
+def _kinds(*triples):
+    """A `kinds` sub-aggregation: (kind, count, of which food)."""
+    return {"buckets": [{"key": k, "doc_count": n, "food": {"doc_count": f}} for k, n, f in triples]}
+
+
+def _session_hist():
+    buckets = [
+        ("2026-11-09T07:00:00", 2, _kinds(("registration", 2, 0))),
+        ("2026-11-09T08:30:00", 0, _kinds()),
+        (
+            "2026-11-09T09:00:00",
+            9,
+            _kinds(("colocated", 5, 0), ("lightning", 2, 0), ("break", 1, 1), ("keynote", 1, 0)),
+        ),
+    ]
+    return {"buckets": [{"key_as_string": k, "doc_count": n, "kinds": ks} for k, n, ks in buckets]}
+
+
 SESSIONS = {
     "hits": {"total": {"value": 600, "relation": "eq"}},
     "aggregations": {
@@ -128,7 +149,7 @@ SESSIONS = {
         "day": {
             "doc_count": 78,
             "tracks": _terms(("Project Lightning Talks", 51)),
-            "timeline": _hist(("2026-11-09T07:00:00", 2), ("2026-11-09T08:30:00", 0), ("2026-11-09T09:00:00", 9)),
+            "timeline": _session_hist(),
         },
     },
 }
@@ -193,6 +214,21 @@ ACTIVITY = {
 }
 
 
+def _groups(**counts):
+    return {"talks": 0, "keynotes": 0, "colocated": 0, "food": 0, "other": 0} | counts
+
+
+def test_kinds_in_bucket_folds_kinds_into_groups_and_food_wins():
+    bucket = {
+        "kinds": _kinds(
+            ("talk", 3, 0), ("tutorial", 1, 0), ("keynote", 1, 0), ("colocated", 4, 0),
+            ("break", 2, 2), ("session", 3, 1), ("registration", 1, 0),
+        )
+    }  # fmt: skip
+    assert dash.kinds_in_bucket(bucket) == _groups(talks=4, keynotes=1, colocated=4, food=3, other=3)
+    assert dash.kinds_in_bucket({}) == _groups()
+
+
 def test_shape_builds_the_payload():
     out = dash.shape("2026-11-09", NOW, SESSIONS, PEOPLE, AGENDA, ACTIVITY)
     assert out["now"] == "2026-11-09T08:40:00"
@@ -202,10 +238,16 @@ def test_shape_builds_the_payload():
     assert out["timeline"] == {
         "interval_minutes": 30,
         "buckets": [
-            {"start": "2026-11-09T07:00:00", "total": 2, "mine": 0},
-            {"start": "2026-11-09T08:30:00", "total": 0, "mine": 0},
-            {"start": "2026-11-09T09:00:00", "total": 9, "mine": 1},
+            {"start": "2026-11-09T07:00:00", "total": 2, "mine": 0, "kinds": _groups(other=2)},
+            {"start": "2026-11-09T08:30:00", "total": 0, "mine": 0, "kinds": _groups()},
+            {
+                "start": "2026-11-09T09:00:00",
+                "total": 9,
+                "mine": 1,
+                "kinds": _groups(talks=2, keynotes=1, colocated=5, food=1),
+            },
         ],
+        "kind_totals": _groups(talks=2, keynotes=1, colocated=5, food=1, other=2),
     }
     assert out["tracks"] == [{"name": "Project Lightning Talks", "sessions": 51}]
     assert out["filling"] == [
